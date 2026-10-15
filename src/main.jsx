@@ -1,0 +1,468 @@
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { TEAM, emptyData, today } from "./lib/domain.mjs";
+import { repository } from "./lib/repository.mjs";
+import { Badge, Icon, Modal } from "./components/ui.jsx";
+import VisitForm from "./components/VisitForm.jsx";
+import {
+  Catalog,
+  Contacts,
+  Dashboard,
+  Reports,
+  Schedule,
+  Team,
+  VisitDetail,
+  VisitsTable,
+  Works,
+} from "./components/pages.jsx";
+import "./styles.css";
+import "./readability.css";
+
+const NAV = [
+  ["overview", "grid", "Visão geral"],
+  ["new", "plus", "Nova visita"],
+  ["visits", "visit", "Visitas realizadas"],
+  ["schedule", "calendar", "Programação"],
+  ["works", "building", "Obras"],
+  ["contacts", "users", "Contatos"],
+  ["reports", "chart", "Relatórios"],
+  ["catalog", "box", "Produtos"],
+  ["team", "users", "Colaboradores"],
+];
+const PAGE = {
+  new: [
+    "NOVA VISITA",
+    "Cada visita, uma oportunidade.",
+    "Um registro simples para construir grandes conexões.",
+  ],
+  overview: [
+    "VISÃO GERAL",
+    "Seu próximo resultado começa aqui.",
+    "Uma visão completa das suas conexões e oportunidades.",
+  ],
+  visits: [
+    "VISITAS REALIZADAS",
+    "Cada conexão tem uma história.",
+    "Consulte os registros e acompanhe os próximos passos.",
+  ],
+  schedule: [
+    "PROGRAMAÇÃO",
+    "O próximo encontro está no radar.",
+    "Planeje seus retornos, no ritmo da sua rotina.",
+  ],
+  works: [
+    "OBRAS",
+    "Onde as possibilidades ganham forma.",
+    "Endereços, pessoas e oportunidades em um só lugar.",
+  ],
+  contacts: [
+    "CONTATOS",
+    "Pessoas que constroem com você.",
+    "Sua rede de arquitetos, empreiteiros e responsáveis.",
+  ],
+  reports: [
+    "RELATÓRIOS",
+    "Uma visão além da visita.",
+    "Transforme seus registros em decisões mais claras.",
+  ],
+  catalog: [
+    "PRODUTOS",
+    "Do primeiro detalhe ao acabamento.",
+    "Um portfólio de soluções para transformar ambientes.",
+  ],
+  team: [
+    "COLABORADORES",
+    "Uma equipe. Muitas possibilidades.",
+    "As pessoas por trás de cada nova oportunidade.",
+  ],
+};
+
+class AppBoundary extends React.Component {
+  state = { error: false };
+  static getDerivedStateFromError() {
+    return { error: true };
+  }
+  render() {
+    return this.state.error ? (
+      <main className="startup">
+        <h1>Não foi possível abrir esta tela.</h1>
+        <p>
+          Recarregue a página para tentar novamente. Os registros salvos
+          permanecem neste navegador.
+        </p>
+        <button className="button primary" onClick={() => location.reload()}>
+          Recarregar
+        </button>
+      </main>
+    ) : (
+      this.props.children
+    );
+  }
+}
+
+function App() {
+  const [data, setData] = useState(emptyData);
+  const dataRef = useRef(data);
+  const saving = useRef(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [page, setPage] = useState("new");
+  const [navOpen, setNavOpen] = useState(false);
+  const [userId, setUserId] = useState("claudionor");
+  const [notice, setNotice] = useState("");
+  const [detail, setDetail] = useState(null);
+  const [activePlan, setActivePlan] = useState(null);
+  const [formKey, setFormKey] = useState(0);
+  const [dirty, setDirty] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState(null);
+  const navRef = useRef(null);
+  const menuRef = useRef(null);
+  useEffect(() => {
+    let active = true;
+    repository
+      .load()
+      .then((next) => {
+        if (active) {
+          dataRef.current = next;
+          setData(next);
+          setLoading(false);
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setLoadError(error.message);
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(""), 5500);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  useEffect(() => {
+    if (!dirty) return;
+    const beforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [dirty]);
+  useEffect(() => {
+    if (!navOpen) return;
+    const previous = document.activeElement;
+    navRef.current?.querySelector("button")?.focus();
+    const key = (event) => {
+      if (event.key === "Escape") {
+        setNavOpen(false);
+        menuRef.current?.focus();
+      }
+      if (event.key === "Tab") {
+        const buttons = [...navRef.current.querySelectorAll("button")];
+        const first = buttons[0];
+        const last = buttons.at(-1);
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        }
+        if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("keydown", key);
+      previous?.focus();
+    };
+  }, [navOpen]);
+  const save = useCallback(async (updater, message) => {
+    if (saving.current)
+      throw new Error("Aguarde o registro anterior terminar de salvar.");
+    saving.current = true;
+    try {
+      const next = updater(dataRef.current);
+      await repository.save(next);
+      dataRef.current = next;
+      setData(next);
+      setNotice(message);
+      return next;
+    } finally {
+      saving.current = false;
+    }
+  }, []);
+  const navigate = (next) => {
+    setPage(next);
+    setNavOpen(false);
+    window.scrollTo({ top: 0 });
+  };
+  const openVisit = (plan) => {
+    setActivePlan({ ...plan, userId: plan.userId || userId });
+    setFormKey((key) => key + 1);
+    setDirty(false);
+    setPendingPlan(null);
+    navigate("new");
+  };
+  const startVisit = (plan) => {
+    if (dirty) setPendingPlan(plan);
+    else openVisit(plan);
+  };
+  const user = TEAM.find((item) => item.id === userId);
+  const metadata = PAGE[page];
+  if (loading || loadError)
+    return (
+      <main className="startup">
+        <img
+          src={`${import.meta.env.BASE_URL}famac-logo.jpg`}
+          alt="FAMAC Acabamentos"
+        />
+        <h1>
+          {loadError
+            ? "Precisamos de acesso ao armazenamento"
+            : "Preparando suas próximas conexões…"}
+        </h1>
+        {loadError && (
+          <>
+            <p>{loadError}</p>
+            <button
+              className="button primary"
+              onClick={() => location.reload()}
+            >
+              Tentar novamente
+            </button>
+          </>
+        )}
+      </main>
+    );
+  return (
+    <div className="app-shell">
+      <a className="skip-link" href="#main-content">
+        Ir para o conteúdo
+      </a>
+      {navOpen && (
+        <button
+          className="nav-scrim"
+          aria-label="Fechar navegação"
+          onClick={() => setNavOpen(false)}
+        />
+      )}
+      <aside className={`sidebar ${navOpen ? "open" : ""}`} ref={navRef}>
+        <div className="sidebar-brand">
+          <img
+            src={`${import.meta.env.BASE_URL}famac-logo.jpg`}
+            alt="FAMAC Acabamentos — realizando sonhos ao transformar ambientes"
+          />
+          <span className="brand-system">
+            VISITAÇÃO <i /> PROSPECÇÃO
+          </span>
+        </div>
+        <span className="nav-group-label">SEU ESPAÇO DE CONEXÕES</span>
+        <nav aria-label="Navegação principal">
+          {NAV.map(([id, icon, label]) => (
+            <button
+              key={id}
+              aria-label={label}
+              className={`${page === id ? "active" : ""} ${id === "new" ? "new-visit-nav" : ""}`}
+              aria-current={page === id ? "page" : undefined}
+              onClick={() => navigate(id)}
+            >
+              <Icon name={icon} size={19} />
+              <span>{label}</span>
+              {id === "new" && (
+                <span className="nav-plus" aria-hidden="true">
+                  +
+                </span>
+              )}
+              {id === "works" && data.works.length > 0 && (
+                <small>{data.works.length}</small>
+              )}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-bottom">
+          <span className="sidebar-line" />
+          <p>
+            Realizando sonhos ao
+            <br />
+            <strong>transformar ambientes.</strong>
+          </p>
+          <span>
+            FAMAC ACABAMENTOS <small>© {today().slice(0, 4)}</small>
+          </span>
+        </div>
+      </aside>
+      <div className="workspace">
+        <header className="topbar">
+          <div className="breadcrumb">
+            <button
+              className="icon-button menu-toggle"
+              ref={menuRef}
+              aria-label="Abrir navegação"
+              aria-expanded={navOpen}
+              onClick={() => setNavOpen(!navOpen)}
+            >
+              <Icon name="menu" />
+            </button>
+            <span>Meu espaço</span>
+            <Icon name="chevron" size={13} />
+            <strong>{NAV.find((item) => item[0] === page)[2]}</strong>
+          </div>
+          <div className="topbar-right">
+            <span className="topbar-date">
+              <Icon name="calendar" size={16} />
+              {new Date(`${today()}T12:00:00`).toLocaleDateString("pt-BR", {
+                day: "2-digit",
+                month: "long",
+              })}
+            </span>
+            <span className="topbar-divider" />
+            <span className="avatar">{user.initials}</span>
+            <label className="profile-select">
+              <span>Colaborador na prévia</span>
+              <select
+                aria-label="Colaborador na prévia"
+                value={userId}
+                onChange={(event) => setUserId(event.target.value)}
+              >
+                {TEAM.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </header>
+        <main id="main-content" tabIndex={-1}>
+          <div className="page-header">
+            <div>
+              <span className="eyebrow">{metadata[0]}</span>
+              <h1>{metadata[1]}</h1>
+              <p>{metadata[2]}</p>
+            </div>
+            <span className="preview-pill">
+              <i />
+              Prévia local
+            </span>
+          </div>
+          <div className="local-notice">
+            <Icon name="info" size={16} />
+            <p>
+              Os registros ficam somente neste navegador. Esta prévia ainda não
+              possui login nem sincronização entre dispositivos.
+            </p>
+          </div>
+          <div hidden={page !== "new"}>
+            <VisitForm
+              key={formKey}
+              data={data}
+              userId={userId}
+              save={save}
+              plan={activePlan}
+              onDirty={setDirty}
+              onSaved={() => {
+                setActivePlan(null);
+                setFormKey((key) => key + 1);
+              }}
+            />
+          </div>
+          {page === "overview" && (
+            <Dashboard data={data} navigate={navigate} onDetail={setDetail} />
+          )}
+          {page === "visits" && (
+            <section className="panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>Seu histórico de visitas</h2>
+                  <p>Todos os registros, organizados e sempre por perto.</p>
+                </div>
+                <button
+                  className="button primary"
+                  onClick={() => navigate("new")}
+                >
+                  <Icon name="plus" size={17} />
+                  Nova visita
+                </button>
+              </div>
+              <VisitsTable visits={data.visits} onDetail={setDetail} />
+            </section>
+          )}
+          {page === "works" && (
+            <Works data={data} save={save} onVisit={startVisit} />
+          )}
+          {page === "contacts" && (
+            <Contacts data={data} save={save} onDetail={setDetail} />
+          )}
+          {page === "schedule" && (
+            <Schedule
+              data={data}
+              userId={userId}
+              save={save}
+              onVisit={startVisit}
+            />
+          )}
+          {page === "reports" && <Reports data={data} onDetail={setDetail} />}
+          {page === "catalog" && <Catalog data={data} />}
+          {page === "team" && (
+            <Team data={data} userId={userId} onUserChange={setUserId} />
+          )}
+          <footer className="workspace-footer">
+            <span>
+              FAMAC <b>Acabamentos</b>
+            </span>
+            <span>Conexões que transformam ambientes.</span>
+          </footer>
+        </main>
+      </div>
+      {notice && (
+        <div className="toast" role="status">
+          <span>
+            <Icon name="check" size={18} />
+          </span>
+          {notice}
+          <button
+            className="icon-button"
+            aria-label="Fechar aviso"
+            onClick={() => setNotice("")}
+          >
+            <Icon name="close" size={15} />
+          </button>
+        </div>
+      )}
+      {detail && <VisitDetail visit={detail} onClose={() => setDetail(null)} />}
+      {pendingPlan && (
+        <Modal title="Abrir outra visita?" onClose={() => setPendingPlan(null)}>
+          <p>
+            Há uma visita em preenchimento. Ao abrir esta obra, os campos e as
+            fotos ainda não salvos serão descartados.
+          </p>
+          <footer className="modal-actions">
+            <button
+              className="button secondary"
+              onClick={() => setPendingPlan(null)}
+            >
+              Continuar preenchendo
+            </button>
+            <button
+              className="button primary"
+              onClick={() => openVisit(pendingPlan)}
+            >
+              Abrir outra visita
+            </button>
+          </footer>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+createRoot(document.getElementById("root")).render(
+  <AppBoundary>
+    <App />
+  </AppBoundary>,
+);

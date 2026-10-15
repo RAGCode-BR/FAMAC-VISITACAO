@@ -1,0 +1,50 @@
+import { emptyData } from "./domain.mjs";
+
+// Apenas o armazenamento FAMAC. Nenhuma credencial, SDK ou conexão externa.
+const DATABASE_NAME = "famac-visitacao-local-v1";
+let connection;
+async function database() {
+  if (connection) return connection;
+  connection = new Promise((resolve, reject) => {
+    const request = indexedDB.open(DATABASE_NAME, 1);
+    request.onupgradeneeded = () =>
+      request.result.createObjectStore("application");
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => {
+      connection = undefined;
+      reject(
+        new Error(
+          "Não foi possível abrir o armazenamento local. Verifique as permissões do navegador.",
+        ),
+      );
+    };
+  });
+  return connection;
+}
+export const repository = {
+  async load() {
+    const db = await database();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction("application", "readonly");
+      const request = transaction.objectStore("application").get("state");
+      request.onsuccess = () => resolve(request.result || emptyData());
+      request.onerror = () =>
+        reject(new Error("Não foi possível ler os dados locais."));
+    });
+  },
+  async save(data) {
+    const db = await database();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction("application", "readwrite");
+      transaction.objectStore("application").put(data, "state");
+      transaction.oncomplete = () => resolve(data);
+      transaction.onabort = () =>
+        reject(
+          new Error(
+            "Não foi possível salvar. O armazenamento pode estar cheio. Seus dados anteriores foram preservados.",
+          ),
+        );
+      transaction.onerror = () => {}; // onabort comunica o erro uma única vez.
+    });
+  },
+};
