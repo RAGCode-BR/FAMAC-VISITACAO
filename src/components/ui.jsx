@@ -446,6 +446,8 @@ export function AddressFields({ value, onChange }) {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const request = useRef(0);
+  const pendingCep = useRef("");
+  const lastSuccessfulCep = useRef("");
   const latest = useRef(value);
   latest.current = value;
   useEffect(
@@ -455,8 +457,14 @@ export function AddressFields({ value, onChange }) {
     [],
   );
   const change = (key) => (event) => {
-    if (key === "cep") {
+    if (
+      key === "cep" &&
+      event.target.value.replace(/\D/g, "") !==
+        latest.current.cep.replace(/\D/g, "")
+    ) {
       request.current++;
+      pendingCep.current = "";
+      lastSuccessfulCep.current = "";
       setBusy(false);
       setStatus("");
     }
@@ -466,13 +474,19 @@ export function AddressFields({ value, onChange }) {
         key === "state" ? event.target.value.toUpperCase() : event.target.value,
     });
   };
-  const lookup = async () => {
-    const cep = value.cep.replace(/\D/g, "");
+  const lookup = async ({ automatic = false } = {}) => {
+    const cep = latest.current.cep.replace(/\D/g, "");
     if (cep.length !== 8)
       return setStatus(
         "Informe um CEP com 8 dígitos ou preencha o endereço manualmente.",
       );
+    if (
+      pendingCep.current === cep ||
+      (automatic && lastSuccessfulCep.current === cep)
+    )
+      return;
     const token = ++request.current;
+    pendingCep.current = cep;
     setBusy(true);
     setStatus("");
     try {
@@ -486,6 +500,7 @@ export function AddressFields({ value, onChange }) {
         return setStatus(
           "CEP não encontrado. Você pode preencher o endereço manualmente.",
         );
+      lastSuccessfulCep.current = cep;
       onChange({
         ...latest.current,
         cep: address.cep,
@@ -503,7 +518,10 @@ export function AddressFields({ value, onChange }) {
           "A consulta está indisponível. Preencha o endereço manualmente.",
         );
     } finally {
-      if (token === request.current) setBusy(false);
+      if (token === request.current) {
+        pendingCep.current = "";
+        setBusy(false);
+      }
     }
   };
   return (
@@ -513,6 +531,11 @@ export function AddressFields({ value, onChange }) {
           label="CEP"
           value={value.cep}
           onChange={change("cep")}
+          onBlur={() => {
+            if (latest.current.cep.replace(/\D/g, "").length === 8) {
+              void lookup({ automatic: true });
+            }
+          }}
           placeholder="00000-000"
           maxLength={9}
           inputMode="numeric"
@@ -520,7 +543,7 @@ export function AddressFields({ value, onChange }) {
         <button
           type="button"
           className="button secondary lookup"
-          onClick={lookup}
+          onClick={() => lookup()}
           disabled={busy}
         >
           <Icon name="search" size={17} />

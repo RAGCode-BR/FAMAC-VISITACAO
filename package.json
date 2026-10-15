@@ -11,7 +11,8 @@
     "preview": "vite preview --host 127.0.0.1 --port 4174 --strictPort",
     "test": "node --test scripts/domain.test.mjs",
     "test:ui": "node scripts/smoke.mjs",
-    "test:pages": "node scripts/check-pages.mjs"
+    "test:pages": "node scripts/check-pages.mjs",
+    "test:cep": "node scripts/cep-ui.mjs"
   },
   "dependencies": {
     "react": "19.2.7",

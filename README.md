@@ -26,7 +26,7 @@ O build está em `dist/`; a prévia do build usa **http://127.0.0.1:4174/**. Cad
 ## Esta versão
 
 - Entrada diretamente em Nova visita, com formulário adaptado para celular.
-- Obras com endereço completo, bairro obrigatório e consulta de CEP com preenchimento manual como alternativa.
+- Obras com endereço completo, bairro obrigatório e consulta de CEP ao sair do campo completo (Tab no computador ou troca de campo no celular). O botão também permite buscar novamente; preenchimento manual continua disponível.
 - Responsável e telefone opcionais para a prospecção inicial (quando preenchido, telefone exige DDD); empreiteiro e arquiteto com busca e cadastro na própria visita.
 - Tipos comercial e residencial; seleção de múltiplos produtos oferecidos e vendidos.
 - Fotos por câmera/galeria, com até 6 imagens, limitadas a 12 MB por arquivo antes da otimização local.

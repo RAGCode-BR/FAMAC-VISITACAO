@@ -1,10 +1,53 @@
 /* Leitura em campo: contraste, textos de apoio e alvos de toque. */
+.sidebar-brand {
+  padding: 18px 16px 22px;
+}
+.sidebar-logo-frame {
+  position: relative;
+  width: 190px;
+  max-width: 100%;
+  height: 148px;
+  overflow: hidden;
+  margin: auto;
+}
+.sidebar-logo-frame img {
+  position: absolute;
+  width: 153%;
+  height: auto;
+  max-width: none;
+  left: 50%;
+  top: -7px;
+  transform: translateX(-50%);
+}
+.brand-tagline {
+  font-size: 13px;
+  font-weight: 500;
+  font-style: italic;
+  line-height: 1.65;
+  color: #f1f3fb;
+  max-width: 195px;
+  margin: 8px auto 0;
+}
+.brand-system {
+  flex-wrap: wrap;
+  letter-spacing: 1.2px;
+  margin-top: 12px;
+}
+.sidebar-bottom > span:last-child {
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  gap: 10px;
+}
+.sidebar-bottom small {
+  font-size: 11px;
+  white-space: nowrap;
+}
 .table-scroll {
   position: relative;
 }
 .field > label,
 .field > legend {
-  font-size: 12px;
+  font-size: 14px;
   color: #485572;
 }
 .field > small,
@@ -12,37 +55,37 @@
   color: #748098;
 }
 .product-choice {
-  font-size: 11px;
+  font-size: 13px;
 }
 .sold-choice {
-  font-size: 10px;
+  font-size: 12px;
   min-height: 33px;
 }
 .sidebar nav button {
-  font-size: 13px;
+  font-size: 15px;
 }
 .sidebar nav button small {
-  font-size: 10px;
+  font-size: 12px;
 }
 .summary-card dl > div,
 .summary-products span {
-  font-size: 11px;
+  font-size: 13px;
 }
 .summary-tip p,
 .aside-help p {
-  font-size: 10px;
+  font-size: 12px;
 }
 .page-header p,
 .directory-intro p {
-  font-size: 13px;
+  font-size: 15px;
   color: #748098;
 }
 .panel-heading p {
-  font-size: 12px;
+  font-size: 14px;
   color: #748098;
 }
 .empty-state p {
-  font-size: 12px;
+  font-size: 14px;
   color: #7b879d;
 }
 .empty-state h3 {
@@ -50,17 +93,17 @@
 }
 .search-input input,
 .search-input input::placeholder {
-  font-size: 12px;
+  font-size: 14px;
 }
 .report-filter-grid select,
 .report-filter-grid input {
-  font-size: 12px;
+  font-size: 14px;
 }
 .metric > div > span {
-  font-size: 11px;
+  font-size: 13px;
 }
 .metric > small {
-  font-size: 10px;
+  font-size: 12px;
 }
 .metric-accent > div > span {
   color: #c0c8df;
@@ -69,34 +112,34 @@
   color: #a5b2cf;
 }
 .product-chart-row > button {
-  font-size: 10px;
+  font-size: 12px;
 }
 .ranking-label b,
 .ranking-label button {
-  font-size: 12px;
+  font-size: 14px;
 }
 .brand-card p {
-  font-size: 12px;
+  font-size: 14px;
 }
 .brand-card > .eyebrow {
-  font-size: 8px;
+  font-size: 12px;
 }
 .form-footer > p {
-  font-size: 11px;
+  font-size: 13px;
 }
 .local-notice {
   color: #707d97;
 }
 .local-notice p {
-  font-size: 11px;
+  font-size: 13px;
 }
 .product-legend,
 .chart-legend {
-  font-size: 10px;
+  font-size: 12px;
   color: #6c7b97;
 }
 .field-note {
-  font-size: 11px;
+  font-size: 13px;
   color: #7c8aa3;
 }
 .contact-options > button {
@@ -104,36 +147,36 @@
 }
 @media (max-width: 1250px) {
   .sidebar nav button {
-    font-size: 12px;
+    font-size: 14px;
   }
   .product-choice {
-    font-size: 10px;
+    font-size: 12px;
   }
   .summary-products span {
-    font-size: 10px;
+    font-size: 12px;
   }
   .summary-title h3 {
-    font-size: 12px;
+    font-size: 14px;
   }
 }
 @media (max-width: 760px) {
   .sidebar nav button {
     min-height: 46px;
-    font-size: 13px;
+    font-size: 15px;
   }
   .field > label,
   .field > legend {
-    font-size: 12px;
+    font-size: 14px;
   }
   .section-heading h2 {
-    font-size: 16px;
+    font-size: 17px;
   }
   .section-heading p {
-    font-size: 11px;
+    font-size: 13px;
   }
   .page-header p,
   .directory-intro p {
-    font-size: 12px;
+    font-size: 14px;
   }
   .button {
     min-height: 44px;
@@ -150,61 +193,66 @@
     height: 33px;
   }
   .field > small {
-    font-size: 10px;
+    font-size: 12px;
   }
   .product-choice {
     min-height: 49px;
-    font-size: 11px;
+    font-size: 13px;
   }
   .sold-choice {
     min-height: 36px;
-    font-size: 11px;
+    font-size: 13px;
   }
   .product-legend,
   .chart-legend {
-    font-size: 10px;
-  }
-  .form-footer > p {
-    font-size: 11px;
-  }
-  .schedule-check strong {
     font-size: 12px;
   }
-  .schedule-check small {
-    font-size: 11px;
-  }
-  .photo-upload > strong {
+  .form-footer > p {
     font-size: 13px;
   }
+  .schedule-check strong {
+    font-size: 14px;
+  }
+  .schedule-check small {
+    font-size: 13px;
+  }
+  .photo-upload > strong {
+    font-size: 15px;
+  }
   .photo-upload > p {
-    font-size: 11px;
+    font-size: 13px;
   }
   .photo-upload > small {
-    font-size: 10px;
+    font-size: 12px;
   }
   .photo-upload .button {
     min-height: 42px;
-    font-size: 11px;
+    font-size: 13px;
   }
   .local-notice p {
-    font-size: 10px;
-  }
-  .catalog-card h3 {
     font-size: 12px;
   }
+  .catalog-card h3 {
+    font-size: 14px;
+  }
   .catalog-card p {
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 @media (max-width: 480px) {
+  .list-toolbar > .tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
   .section-heading h2 {
-    font-size: 14px;
+    font-size: 15px;
   }
   .section-heading p {
-    font-size: 10px;
+    font-size: 12px;
   }
   .preview-pill {
-    font-size: 8px;
+    font-size: 12px;
     margin-left: 0;
   }
   .page-header {
@@ -224,51 +272,51 @@
     max-width: none;
   }
   .page-header .eyebrow {
-    font-size: 9px;
+    font-size: 12px;
   }
   .field > label,
   .field > legend {
-    font-size: 12px;
+    font-size: 14px;
   }
   .product-choice {
-    font-size: 10px;
+    font-size: 12px;
   }
   .metric > div > span {
-    font-size: 10px;
+    font-size: 12px;
   }
   .metric > small {
-    font-size: 9px;
+    font-size: 12px;
   }
   .report-filter-grid .field > label {
-    font-size: 11px;
+    font-size: 13px;
   }
   .tabs button {
     min-height: 38px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .contact-picker > small {
     line-height: 1.7;
   }
   .empty-state p {
-    font-size: 12px;
-  }
-  .empty-state h3 {
     font-size: 14px;
   }
+  .empty-state h3 {
+    font-size: 15px;
+  }
   .panel-heading p {
-    font-size: 11px;
+    font-size: 13px;
   }
   .directory-intro h2 {
-    font-size: 17px;
+    font-size: 18px;
   }
   .workspace-footer > span:last-child {
-    font-size: 9px;
+    font-size: 12px;
   }
   .photo-upload .button-row {
     gap: 12px;
   }
   .photo-upload .button {
-    font-size: 10px;
+    font-size: 12px;
     padding-inline: 10px;
   }
 }

@@ -253,10 +253,15 @@ function App() {
       )}
       <aside className={`sidebar ${navOpen ? "open" : ""}`} ref={navRef}>
         <div className="sidebar-brand">
-          <img
-            src={`${import.meta.env.BASE_URL}famac-logo.jpg`}
-            alt="FAMAC Acabamentos — realizando sonhos ao transformar ambientes"
-          />
+          <div className="sidebar-logo-frame">
+            <img
+              src={`${import.meta.env.BASE_URL}famac-logo.jpg`}
+              alt="FAMAC Acabamentos"
+            />
+          </div>
+          <p className="brand-tagline">
+            Realizando sonhos ao transformar ambientes!
+          </p>
           <span className="brand-system">
             VISITAÇÃO <i /> PROSPECÇÃO
           </span>

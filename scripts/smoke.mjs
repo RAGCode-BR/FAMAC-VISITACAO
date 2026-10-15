@@ -114,9 +114,7 @@ try {
     .getByLabel("Nome / identificação da obra", { exact: false })
     .fill("Obra teste de integração");
   await page.getByLabel("CEP", { exact: true }).fill("01001000");
-  await page
-    .getByRole("button", { name: "Buscar endereço", exact: true })
-    .click();
+  await page.getByLabel("CEP", { exact: true }).press("Tab");
   await page.getByText("Endereço encontrado.", { exact: false }).waitFor();
   assert.equal(
     await page.getByLabel("Bairro", { exact: false }).first().inputValue(),
