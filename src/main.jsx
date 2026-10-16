@@ -443,20 +443,6 @@ function App({ account, onLogout }) {
               <h1>{metadata[1]}</h1>
               <p>{metadata[2]}</p>
             </div>
-            <span className="preview-pill">
-              <i />
-              {account ? "Conectado" : "Prévia local"}
-            </span>
-          </div>
-          <div className="local-notice">
-            <Icon name="info" size={16} />
-            <p>
-              {account
-                ? account.role === "admin"
-                  ? "Acesso de administração. Consulte toda a equipe nos relatórios; use o seletor de colaborador para cadastrar e acompanhar suas obras."
-                  : "Seu acesso mostra somente seus registros. As visitas e fotos são salvas para você consultar em outros dispositivos."
-                : "Os registros ficam somente neste navegador. Esta prévia ainda não possui login nem sincronização entre dispositivos."}
-            </p>
           </div>
           <div hidden={page !== "new"}>
             <VisitForm
