@@ -7,7 +7,7 @@ O provedor escolhido é Neon. A configuração e a operação estão descritas e
 | Entidade           | Informações                                                                                                |
 | ------------------ | ---------------------------------------------------------------------------------------------------------- |
 | Perfis             | Identidade autenticada, nome do colaborador e permissão                                                    |
-| Contatos           | Nome, função (empreiteiro/arquiteto/responsável), telefone, empresa e observações                          |
+| Contatos           | Nome, função (empreiteiro/arquiteto/responsável), telefone, cidade, empresa e observações; arquitetos e empreiteiros compartilhados |
 | Obras              | Nome, tipo, responsável, telefone, endereço e bairro; vínculos com os contatos                             |
 | Produtos           | Catálogo dos 14 produtos informados                                                                        |
 | Visitas            | Obra, data, colaborador, endereço e contatos na época, tipo de visita, notas, total vendido e próxima ação |
@@ -23,6 +23,6 @@ O provedor escolhido é Neon. A configuração e a operação estão descritas e
 4. Definir se o trabalho em campo precisa funcionar sem sinal e implementar uma fila offline se necessário.
 5. Evoluir consultas de relatórios no servidor e paginação remota conforme o histórico crescer.
 
-O padrão será iniciar o banco definitivo vazio. Nenhum dado local deve ser enviado automaticamente. Uma eventual importação dos registros desta prévia deve ser uma operação explícita, validada e separada.
+O banco iniciou vazio e recebeu a importação de arquitetos solicitada explicitamente. Nenhum dado da prévia local é enviado automaticamente. Novas importações devem ser operações explícitas, validadas e separadas.
 
 A prévia local isolada permite seleção livre de colaborador para testes. A versão conectada aplica as permissões no backend e não depende dessa seleção para autorizar acesso.

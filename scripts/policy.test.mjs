@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { requireOwner, validateState } from "../server/policy.mjs";
+import {
+  requireOwner,
+  requireContactWrite,
+  validateState,
+} from "../server/policy.mjs";
 import { pinIdentity } from "../src/lib/identity.mjs";
 
 test("PIN de um dígito preserva as contas existentes e aceita o zero", () => {
@@ -13,7 +17,15 @@ test("PIN de um dígito preserva as contas existentes e aceita o zero", () => {
     10,
   );
   for (const pin of [
-    "", "01", "100001", "900001", "charles", "../1", " 0", 0, null,
+    "",
+    "01",
+    "100001",
+    "900001",
+    "charles",
+    "../1",
+    " 0",
+    0,
+    null,
   ])
     assert.throws(() => pinIdentity(pin));
 });
@@ -30,4 +42,47 @@ test("o servidor recusa identificadores repetidos ou inválidos", () => {
   const record = { id: "d2cbf329-6263-4ffa-8e7e-84ec983ee7f4" };
   assert.throws(() => validateState({ ...state, works: [record, record] }));
   assert.throws(() => validateState({ ...state, works: [{ id: "unsafe" }] }));
+});
+
+test("arquitetos e empreiteiros compartilhados não liberam contatos privados nem transferência de cargo", () => {
+  const member = { role: "collaborator", teamId: "charles" };
+  for (const role of ["architect", "contractor"])
+    assert.doesNotThrow(() =>
+      requireContactWrite(member, "claudionor", { role }, { role }),
+    );
+  assert.doesNotThrow(() =>
+    requireContactWrite(
+      member,
+      "shared",
+      { role: "architect" },
+      { role: "architect" },
+    ),
+  );
+  assert.throws(
+    () =>
+      requireContactWrite(
+        member,
+        "claudionor",
+        { role: "responsible" },
+        { role: "architect" },
+      ),
+    { status: 403 },
+  );
+  assert.throws(
+    () =>
+      requireContactWrite(
+        member,
+        "claudionor",
+        { role: "architect" },
+        { role: "responsible" },
+      ),
+    { status: 403 },
+  );
+  assert.throws(
+    () =>
+      requireContactWrite(member, "claudionor", undefined, {
+        role: "architect",
+      }),
+    { status: 403 },
+  );
 });

@@ -12,6 +12,7 @@ import {
   validId,
   fail,
   requireOwner,
+  requireContactWrite,
   validateState,
   validateRecord,
 } from "./policy.mjs";
@@ -80,14 +81,19 @@ app.use(
   }),
 );
 
-async function readState(db, member) {
+async function readState(db, member, since) {
   const revision = await db.query(
     "SELECT value FROM famac.revision WHERE singleton=true",
   );
   const state = { version: 1, revision: Number(revision.rows[0].value) };
+  if (state.revision === since) return null;
   for (const kind of collections) {
+    const where =
+      kind === "contacts"
+        ? "WHERE owner_id=$1 OR payload->>'role' IN ('architect','contractor')"
+        : "WHERE owner_id=$1";
     const result = await db.query(
-      `SELECT payload, owner_id FROM famac.${kind} ${member.role === "admin" ? "" : "WHERE owner_id=$1"} ORDER BY updated_at,id`,
+      `SELECT payload, owner_id FROM famac.${kind} ${member.role === "admin" ? "" : where} ORDER BY updated_at,id`,
       member.role === "admin" ? [] : [member.teamId],
     );
     state[kind] = result.rows.map((row) => ({
@@ -97,11 +103,11 @@ async function readState(db, member) {
   }
   return state;
 }
-async function snapshot(member) {
+async function snapshot(member, since) {
   const db = await pool.connect();
   try {
     await db.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
-    const state = await readState(db, member);
+    const state = await readState(db, member, since);
     await db.query("COMMIT");
     return state;
   } catch (error) {
@@ -120,7 +126,14 @@ app.get("/members", async (c) => {
   );
   return c.json(result.rows);
 });
-app.get("/state", async (c) => c.json(await snapshot(c.get("member"))));
+app.get("/state", async (c) => {
+  const raw = c.req.query("since");
+  const since = raw === undefined ? undefined : Number(raw);
+  if (raw !== undefined && (!/^\d+$/.test(raw) || !Number.isSafeInteger(since)))
+    fail("Revisão inválida.");
+  const state = await snapshot(c.get("member"), since);
+  return state ? c.json(state) : c.body(null, 204);
+});
 app.get("/operations/:id", async (c) => {
   if (!validId(c.req.param("id"))) fail("Operação inválida.");
   const result = await pool.query(
@@ -170,13 +183,15 @@ app.put("/state", async (c) => {
         if (kind === "visits" && previous.has(record.id))
           fail("O histórico de visitas deve ser preservado.");
         const existing = await db.query(
-          `SELECT owner_id FROM famac.${kind} WHERE id=$1`,
+          `SELECT owner_id,payload FROM famac.${kind} WHERE id=$1`,
           [record.id],
         );
         const owner =
           existing.rows[0]?.owner_id ||
           (kind === "visits" || kind === "plans" ? record.userId : actorTeamId);
-        requireOwner(member, owner);
+        if (kind === "contacts")
+          requireContactWrite(member, owner, existing.rows[0]?.payload, record);
+        else requireOwner(member, owner);
         if (record.ownerId && record.ownerId !== owner)
           fail("Não é permitido transferir a autoria.", 403);
         if ((kind === "visits" || kind === "plans") && record.userId !== owner)
@@ -193,11 +208,7 @@ app.put("/state", async (c) => {
             "SELECT owner_id,payload FROM famac.contacts WHERE id=$1",
             [record[key]],
           );
-          if (
-            !contact.rowCount ||
-            contact.rows[0].owner_id !== owner ||
-            contact.rows[0].payload.role !== role
-          )
+          if (!contact.rowCount || contact.rows[0].payload.role !== role)
             fail("Contato indisponível para esta obra.", 403);
         }
         if (kind === "visits" || kind === "plans") {

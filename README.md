@@ -36,15 +36,15 @@ O build está em `dist/`; a prévia do build usa **http://127.0.0.1:4174/**. Cad
 - Cadastro e edição de obras e contatos; portfólio dos 14 produtos.
 - Visão geral, equipe e relatórios com filtros combinados, rankings, exportação CSV e impressão/PDF.
 - Login com PIN e senha, alteração de senha e redefinição pela administração, sem e-mail de acesso.
-- Integração com Postgres, Auth, Functions e Object Storage do Neon. Colaboradores acessam somente seus próprios registros; a administração consulta a equipe.
+- Integração com Postgres, Auth, Functions e Object Storage do Neon. Arquitetos e empreiteiros são compartilhados; obras, visitas, programação e fotos ficam restritos ao colaborador. A administração consulta a equipe.
 
 Os nomes **Claudionor, Charles e Celso** são os colaboradores configurados. Na versão conectada, a identidade vem da sessão autenticada. Na prévia local isolada, a seleção de perfil serve somente para testes.
 
 ## Dados e banco Neon
 
-A aplicação inicia sem obras, contatos, visitas ou programações. Produtos e nomes dos colaboradores são a configuração informada pelo usuário, não dados importados. O projeto Neon é exclusivo da FAMAC, na região N. Virginia; a API autentica a sessão e verifica a autoria dos registros antes de acessar o banco ou as fotos.
+A prévia local inicia sem obras, contatos, visitas ou programações. Produtos e nomes dos colaboradores são a configuração informada pelo usuário. A produção possui uma lista de arquitetos importada explicitamente; a planilha e os contatos não são incluídos no código público. O projeto Neon é exclusivo da FAMAC, na região N. Virginia; a API autentica a sessão e verifica as permissões antes de acessar o banco ou as fotos.
 
-Na versão conectada, os registros são gravados no Postgres por uma Neon Function; fotos comprimidas ficam no bucket privado `famac-visitas`, e o banco guarda somente suas referências. A aplicação carrega os registros ao entrar. Use **Atualizar** para consultar alterações feitas em outro dispositivo. O rascunho da visita é preservado ao navegar entre telas; alterações ainda não salvas não são sincronizadas.
+Na versão conectada, os registros são gravados no Postgres por uma Neon Function; fotos comprimidas ficam no bucket privado `famac-visitas`, e o banco guarda somente suas referências. A aplicação carrega os registros ao entrar e verifica mudanças automaticamente a cada 30 segundos com a aba visível, ao retornar à janela e ao recuperar a conexão. O rascunho da visita é preservado; alterações ainda não salvas não são sincronizadas. Formulários abertos em modais pausam a atualização para preservar a edição.
 
 O aplicativo também consulta o [ViaCEP](https://viacep.com.br/) para preencher endereços. As fontes tipográficas são carregadas do Google Fonts; se estiverem indisponíveis, o navegador usa fontes do sistema.
 

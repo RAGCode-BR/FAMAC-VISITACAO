@@ -1,4 +1,5 @@
 import { TEAM, validateVisit } from "../src/lib/domain.mjs";
+import { isSharedContact } from "../src/lib/contacts.mjs";
 
 export const collections = ["contacts", "works", "visits", "plans"];
 export const validId = (id) =>
@@ -15,6 +16,10 @@ export function requireOwner(member, ownerId) {
   if (!TEAM.some((item) => item.id === ownerId)) fail("Colaborador inválido.");
   if (member.role !== "admin" && member.teamId !== ownerId)
     fail("Você só pode acessar seus próprios registros.", 403);
+}
+export function requireContactWrite(member, ownerId, previous, next) {
+  if (isSharedContact(previous) && isSharedContact(next)) return;
+  requireOwner(member, ownerId);
 }
 export function validateState(state) {
   if (!state || state.version !== 1) fail("Formato de dados inválido.");
@@ -53,9 +58,20 @@ export function validateRecord(kind, record) {
     )
       fail("Tipo de obra ou UF inválida.");
   } else if (kind === "visits") {
-    for (const field of ["workName", "date", "userId", "street", "neighborhood", "city", "state", "phone"])
-      if (typeof record[field] !== "string") fail("Preencha os dados da visita no formato correto.");
-    if (!Array.isArray(record.offered) || !Array.isArray(record.sold)) fail("Seleção de produtos inválida.");
+    for (const field of [
+      "workName",
+      "date",
+      "userId",
+      "street",
+      "neighborhood",
+      "city",
+      "state",
+      "phone",
+    ])
+      if (typeof record[field] !== "string")
+        fail("Preencha os dados da visita no formato correto.");
+    if (!Array.isArray(record.offered) || !Array.isArray(record.sold))
+      fail("Seleção de produtos inválida.");
     try {
       validateVisit(record);
     } catch (error) {

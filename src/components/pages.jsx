@@ -455,7 +455,9 @@ export function Contacts({ data, save, onDetail }) {
   const contacts = data.contacts.filter(
     (item) =>
       (!role || item.role === role) &&
-      normalize(`${item.name} ${item.company}`).includes(normalize(search)),
+      normalize(
+        `${item.name} ${item.company || ""} ${item.city || ""}`,
+      ).includes(normalize(search)),
   );
   return (
     <>
@@ -496,7 +498,7 @@ export function Contacts({ data, save, onDetail }) {
               aria-label="Buscar contatos"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar nome ou empresa…"
+              placeholder="Buscar nome, cidade ou empresa…"
             />
           </div>
         </div>
@@ -526,7 +528,8 @@ export function Contacts({ data, save, onDetail }) {
                   <Badge tone={item.role === "architect" ? "blue" : ""}>
                     {roleName(item.role)}
                   </Badge>
-                  <p>{item.company || "Empresa não informada"}</p>
+                  {item.company && <p>{item.company}</p>}
+                  {item.city && <p>{item.city}</p>}
                   {item.phone && (
                     <a
                       className="contact-phone"

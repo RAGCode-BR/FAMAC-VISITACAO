@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { TEAM, emptyData, today } from "./lib/domain.mjs";
 import { repository } from "./lib/repository.mjs";
+import { isSharedContact } from "./lib/contacts.mjs";
 import { Badge, Icon, Modal } from "./components/ui.jsx";
 import VisitForm from "./components/VisitForm.jsx";
 import AuthGate, { PasswordForm } from "./components/AuthGate.jsx";
@@ -151,6 +152,56 @@ function App({ account, onLogout }) {
     return () => clearTimeout(timer);
   }, [notice]);
   useEffect(() => {
+    if (!account || loading || loadError) return;
+    let active = true;
+    let pending;
+    let lastAttempt = 0;
+    const sync = async () => {
+      if (
+        document.visibilityState !== "visible" ||
+        !navigator.onLine ||
+        saving.current ||
+        pending ||
+        document.querySelector("dialog[open]") ||
+        Date.now() - lastAttempt < 3000
+      )
+        return;
+      lastAttempt = Date.now();
+      const before = dataRef.current;
+      pending = new AbortController();
+      try {
+        const latest = await repository.sync(before.revision, pending.signal);
+        // Uma resposta anterior ao salvamento não pode sobrescrever o resultado.
+        if (
+          active &&
+          latest &&
+          !saving.current &&
+          !document.querySelector("dialog[open]") &&
+          dataRef.current === before
+        ) {
+          dataRef.current = latest;
+          setData(latest);
+        }
+      } catch {
+        // A próxima consulta tenta novamente; o formulário permanece intacto.
+      } finally {
+        pending = null;
+      }
+    };
+    const interval = setInterval(sync, 30000);
+    window.addEventListener("focus", sync);
+    window.addEventListener("online", sync);
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      active = false;
+      clearInterval(interval);
+      pending?.abort();
+      window.removeEventListener("focus", sync);
+      window.removeEventListener("online", sync);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [account, loading, loadError]);
+  useEffect(() => {
     if (!dirty) return;
     const beforeUnload = (event) => {
       event.preventDefault();
@@ -249,7 +300,11 @@ function App({ account, onLogout }) {
           ...Object.fromEntries(
             ["works", "contacts", "visits", "plans"].map((key) => [
               key,
-              data[key].filter((item) => item.ownerId === userId),
+              data[key].filter(
+                (item) =>
+                  item.ownerId === userId ||
+                  (key === "contacts" && isSharedContact(item)),
+              ),
             ]),
           ),
         }
@@ -391,22 +446,6 @@ function App({ account, onLogout }) {
             )}
             {account && (
               <div className="cloud-account-actions">
-                <button
-                  className="button secondary"
-                  onClick={async () => {
-                    if (saving.current) return;
-                    try {
-                      const latest = await repository.load();
-                      dataRef.current = latest;
-                      setData(latest);
-                      setNotice("Registros atualizados.");
-                    } catch (error) {
-                      setNotice(error.message);
-                    }
-                  }}
-                >
-                  Atualizar
-                </button>
                 <button
                   className="button secondary"
                   onClick={() => setPasswordOpen(true)}

@@ -9,6 +9,9 @@ export const cloudRepository = {
   load() {
     return api("/state");
   },
+  sync(revision, signal) {
+    return api(`/state?since=${revision}`, { signal });
+  },
   async photoUrl(photo) {
     if (photo.url && !photo.key) return photo.url;
     const cached = photoCache.get(photo.id);
@@ -59,15 +62,17 @@ export const cloudRepository = {
             () => null,
           );
           if (outcome?.committed) return this.load();
-          error.message = "Não foi possível confirmar o salvamento. Atualize e confira o histórico antes de registrar a visita novamente.";
+          error.message =
+            "Não foi possível confirmar o salvamento. Atualize e confira o histórico antes de registrar a visita novamente.";
         }
         throw error;
       }
     } catch (error) {
       // Não remover fotos enquanto um COMMIT sem resposta ainda pode concluir.
-      if (!uncertainCommit) await Promise.allSettled(
-        uploaded.map((id) => api(`/photos/${id}`, { method: "DELETE" })),
-      );
+      if (!uncertainCommit)
+        await Promise.allSettled(
+          uploaded.map((id) => api(`/photos/${id}`, { method: "DELETE" })),
+        );
       throw error;
     }
   },

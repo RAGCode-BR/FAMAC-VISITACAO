@@ -174,6 +174,7 @@ export function ContactForm({ initial, role, data, save, onClose, onCreated }) {
       name: "",
       role: role || "contractor",
       phone: "",
+      city: "",
       company: "",
       notes: "",
     },
@@ -256,6 +257,12 @@ export function ContactForm({ initial, role, data, save, onClose, onCreated }) {
             maxLength={180}
           />
         </div>
+        <Field
+          label="Cidade"
+          value={form.city || ""}
+          onChange={change("city")}
+          maxLength={180}
+        />
         <Field label="Observações">
           <textarea
             value={form.notes}
@@ -406,7 +413,8 @@ export function ContactPicker({
               >
                 {item.name}
                 <small>
-                  {item.company ||
+                  {item.city ||
+                    item.company ||
                     (role === "architect" ? "Arquiteto" : "Empreiteiro")}
                 </small>
               </button>

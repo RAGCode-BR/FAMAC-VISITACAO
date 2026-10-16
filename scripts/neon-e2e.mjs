@@ -24,6 +24,7 @@ const saveAccess = () =>
 const reset = new pg.Client({
   connectionString: connectionString(process.env.DATABASE_URL),
 });
+const importedId = crypto.randomUUID();
 await reset.connect();
 try {
   await reset.query("BEGIN");
@@ -31,6 +32,21 @@ try {
     "TRUNCATE famac.photos, famac.operations, famac.plans, famac.visits, famac.works, famac.contacts",
   );
   await reset.query("UPDATE famac.revision SET value=0 WHERE singleton=true");
+  await reset.query(
+    "INSERT INTO famac.contacts(id,owner_id,payload) VALUES ($1,'shared',$2)",
+    [
+      importedId,
+      {
+        id: importedId,
+        name: "Arquiteto importado teste",
+        role: "architect",
+        city: "Sorriso",
+        phone: "",
+        company: "",
+        notes: "",
+      },
+    ],
+  );
   await reset.query("COMMIT");
 } finally {
   await reset.end();
@@ -106,7 +122,8 @@ let lastLogin = 0;
 async function login(account, viewport) {
   // O provedor limita tentativas de login; contextos novos não removem a cota.
   const remaining = lastLogin + 15000 - Date.now();
-  if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
+  if (remaining > 0)
+    await new Promise((resolve) => setTimeout(resolve, remaining));
   lastLogin = Date.now();
   const context = await browser.newContext({
     viewport: viewport || { width: 1440, height: 1100 },
@@ -122,7 +139,7 @@ async function login(account, viewport) {
   await page.locator(".visit-form").waitFor({ timeout: 30000 });
   return { page, context };
 }
-async function register(page, name, relationship = false) {
+async function register(page, name, relationship = false, architectName = "") {
   const form = page.locator(".visit-form");
   await form
     .getByLabel("Nome / identificação da obra", { exact: false })
@@ -133,6 +150,12 @@ async function register(page, name, relationship = false) {
   await form.getByLabel("Bairro", { exact: false }).fill("Centro");
   await form.getByLabel("Cidade", { exact: false }).fill("São Paulo");
   await form.getByLabel("UF", { exact: false }).fill("SP");
+  if (architectName) {
+    await form
+      .getByRole("combobox", { name: "Arquiteto", exact: true })
+      .fill(architectName);
+    await page.getByRole("option").filter({ hasText: architectName }).click();
+  }
   if (relationship)
     await form
       .getByLabel("Tipo de visita", { exact: true })
@@ -166,13 +189,66 @@ try {
   const admin = accounts.find((item) => item.role === "admin");
   const first = await login(claudi);
   assert.equal(await first.page.locator(".topbar select").count(), 0);
-  assert.equal(await first.page.locator(".profile-name").textContent(), claudi.name);
+  assert.equal(
+    await first.page.locator(".profile-name").textContent(),
+    claudi.name,
+  );
+  await first.page.reload();
+  await first.page.locator(".visit-form").waitFor();
+  assert.equal(
+    await first.page
+      .getByRole("button", { name: "Atualizar", exact: true })
+      .count(),
+    0,
+  );
+  let sharedState = (await call(first.page, "/state")).data;
+  const sharedArchitect = {
+    id: crypto.randomUUID(),
+    name: "Arquiteta compartilhada teste",
+    role: "architect",
+    phone: "(66) 99999-0000",
+    city: "Sorriso",
+    company: "",
+    notes: "",
+  };
+  const sharedContractor = {
+    ...sharedArchitect,
+    id: crypto.randomUUID(),
+    name: "Empreiteiro compartilhado teste",
+    role: "contractor",
+  };
+  const privateContact = {
+    ...sharedArchitect,
+    id: crypto.randomUUID(),
+    name: "Responsável privado teste",
+    role: "responsible",
+  };
+  sharedState.contacts.push(sharedArchitect, sharedContractor, privateContact);
+  assert.equal(
+    (
+      await call(first.page, "/state", {
+        method: "PUT",
+        body: JSON.stringify({
+          state: sharedState,
+          revision: sharedState.revision,
+          operationId: crypto.randomUUID(),
+          actorTeamId: "claudionor",
+        }),
+      })
+    ).status,
+    200,
+  );
   await first.page.reload();
   await first.page.locator(".visit-form").waitFor();
   console.log(
     "PASS: login com PIN e senha, sessão restaurada e colaborador fixado",
   );
-  await register(first.page, "Obra de integração Claudionor");
+  await register(
+    first.page,
+    "Obra de integração Claudionor",
+    false,
+    sharedArchitect.name,
+  );
   let stateA = (await call(first.page, "/state")).data;
   assert.equal(stateA.visits.length, 1);
   assert.equal(stateA.plans.length, 1);
@@ -203,12 +279,105 @@ try {
     "PASS: visita de prospecção, obra, retorno, upload no bucket privado e foto no histórico",
   );
   const second = await login(charles);
-  assert.equal((await call(second.page, "/state")).data.visits.length, 0);
-  await register(second.page, "Obra de integração Charles", true);
-  const stateB = (await call(second.page, "/state")).data;
+  const secondInitial = (await call(second.page, "/state")).data;
+  assert.equal(secondInitial.visits.length, 0);
+  assert.ok(secondInitial.contacts.some((c) => c.id === sharedArchitect.id));
+  assert.ok(secondInitial.contacts.some((c) => c.id === sharedContractor.id));
+  assert.equal(
+    secondInitial.contacts.some((c) => c.id === privateContact.id),
+    false,
+  );
+  await register(
+    second.page,
+    "Obra de integração Charles",
+    true,
+    sharedArchitect.name,
+  );
+  let stateB = (await call(second.page, "/state")).data;
   assert.equal(stateB.visits.length, 1);
   assert.equal(stateB.visits[0].stage, "relationship");
   assert.deepEqual(stateB.visits[0].offered, []);
+  assert.equal(stateB.visits[0].architectId, sharedArchitect.id);
+  const updated = (await call(second.page, "/state")).data;
+  updated.contacts.find((c) => c.id === sharedArchitect.id).city = "Sinop";
+  assert.ok(
+    updated.contacts.some((c) => c.id === importedId && c.ownerId === "shared"),
+  );
+  updated.contacts.find((c) => c.id === importedId).city = "Sinop";
+  assert.equal(
+    (
+      await call(second.page, "/state", {
+        method: "PUT",
+        body: JSON.stringify({
+          state: updated,
+          revision: updated.revision,
+          operationId: crypto.randomUUID(),
+          actorTeamId: "charles",
+        }),
+      })
+    ).status,
+    200,
+  );
+  await navigate(first.page, "Nova visita");
+  await first.page
+    .getByLabel("Nome / identificação da obra", { exact: false })
+    .fill("Rascunho preservado durante atualização");
+  await first.page.clock.install();
+  const synchronized = first.page.waitForResponse(
+    (r) => r.url().includes("/state?since=") && r.status() === 200,
+  );
+  await first.page.clock.fastForward(31000);
+  await synchronized;
+  assert.equal(
+    await first.page
+      .getByLabel("Nome / identificação da obra", { exact: false })
+      .inputValue(),
+    "Rascunho preservado durante atualização",
+  );
+  await first.page
+    .getByRole("combobox", { name: "Arquiteto", exact: true })
+    .fill(sharedArchitect.name);
+  await first.page
+    .getByRole("option")
+    .filter({ hasText: sharedArchitect.name })
+    .getByText("Sinop", { exact: true })
+    .waitFor();
+  await first.page.keyboard.press("Escape");
+  const same = (await call(first.page, "/state")).data;
+  assert.equal(
+    (await call(first.page, `/state?since=${same.revision}`)).data,
+    null,
+  );
+  let backgroundRequests = 0;
+  const countSync = (request) => {
+    if (request.url().includes("/state?since=")) backgroundRequests++;
+  };
+  first.page.on("request", countSync);
+  await first.page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await first.page.clock.fastForward(31000);
+  assert.equal(backgroundRequests, 0);
+  const resumed = first.page.waitForResponse(
+    (r) => r.url().includes("/state?since=") && r.status() === 204,
+  );
+  await first.page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await resumed;
+  first.page.off("request", countSync);
+  console.log(
+    "PASS: arquitetos e empreiteiros compartilhados, responsável privado, vínculo em visitas de dois usuários e atualização automática preservando o rascunho",
+  );
+  stateB = (await call(second.page, "/state")).data;
   assert.equal(
     (await call(second.page, `/photos/${photo.id}/url`)).status,
     403,
@@ -273,7 +442,9 @@ try {
   await register(management.page, "Obra de integração Celso", true);
   const celso = await login(accounts.find((item) => item.teamId === "celso"));
   assert.equal((await call(celso.page, "/state")).data.visits.length, 1);
-  console.log("PASS: administração cadastra para o colaborador selecionado e Celso consulta somente sua visita");
+  console.log(
+    "PASS: administração cadastra para o colaborador selecionado e Celso consulta somente sua visita",
+  );
   stateA = (await call(first.page, "/state")).data;
   const operationId = crypto.randomUUID();
   const write = {
