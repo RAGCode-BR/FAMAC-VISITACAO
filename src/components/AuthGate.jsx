@@ -329,14 +329,14 @@ export default function AuthGate({ children }) {
               type="text"
               inputMode="numeric"
               autoComplete="username"
-              minLength={6}
-              maxLength={6}
-              pattern="[0-9]{6}"
+              minLength={1}
+              maxLength={1}
+              pattern="[0-9]"
               value={pin}
               onChange={(event) =>
-                setPin(event.target.value.replace(/\D/g, "").slice(0, 6))
+                setPin(event.target.value.replace(/\D/g, "").slice(0, 1))
               }
-              placeholder="Seu PIN de 6 números"
+              placeholder="Seu PIN de 1 número"
               autoFocus
               required
             />

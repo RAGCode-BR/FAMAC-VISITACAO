@@ -16,15 +16,15 @@ const db = new pg.Client({
 });
 await db.connect();
 const accounts = [
-  { name: "Administrador", pin: "900001", teamId: null, role: "admin" },
+  { name: "Administrador", pin: "0", teamId: null, role: "admin" },
   {
     name: "Claudionor",
-    pin: "100001",
+    pin: "1",
     teamId: "claudionor",
     role: "collaborator",
   },
-  { name: "Charles", pin: "100002", teamId: "charles", role: "collaborator" },
-  { name: "Celso", pin: "100003", teamId: "celso", role: "collaborator" },
+  { name: "Charles", pin: "2", teamId: "charles", role: "collaborator" },
+  { name: "Celso", pin: "3", teamId: "celso", role: "collaborator" },
 ];
 const created = [];
 try {

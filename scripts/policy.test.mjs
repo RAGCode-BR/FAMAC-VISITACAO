@@ -3,9 +3,18 @@ import assert from "node:assert/strict";
 import { requireOwner, validateState } from "../server/policy.mjs";
 import { pinIdentity } from "../src/lib/identity.mjs";
 
-test("a identidade do PIN é numérica e não exige e-mail do colaborador", () => {
-  assert.equal(pinIdentity("100001"), "pin-100001@login.famac.invalid");
-  for (const pin of ["123", "1234567", "charles", "../100001"])
+test("PIN de um dígito preserva as contas existentes e aceita o zero", () => {
+  assert.equal(pinIdentity("0"), "pin-900001@login.famac.invalid");
+  assert.equal(pinIdentity("1"), "pin-100001@login.famac.invalid");
+  assert.equal(pinIdentity("2"), "pin-100002@login.famac.invalid");
+  assert.equal(pinIdentity("3"), "pin-100003@login.famac.invalid");
+  assert.equal(
+    new Set(Array.from({ length: 10 }, (_, n) => pinIdentity(String(n)))).size,
+    10,
+  );
+  for (const pin of [
+    "", "01", "100001", "900001", "charles", "../1", " 0", 0, null,
+  ])
     assert.throws(() => pinIdentity(pin));
 });
 test("somente a administração pode operar em nome de outro colaborador", () => {
