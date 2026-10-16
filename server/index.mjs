@@ -157,6 +157,7 @@ app.put("/state", async (c) => {
   validateState(state);
   requireOwner(member, actorTeamId);
   const db = await pool.connect();
+  const removedProductPhotos = new Set();
   try {
     await db.query("BEGIN");
     const currentRevision = await db.query(
@@ -190,18 +191,49 @@ app.put("/state", async (c) => {
         if (isDeepStrictEqual(previous.get(record.id), record)) continue;
         if (kind === "products") {
           requireCatalogAdmin(member);
-          requireCatalogChange(
-            catalogProducts(before, true).find((item) => item.id === record.id),
-            record,
+          const original = catalogProducts(before, true).find(
+            (item) => item.id === record.id,
           );
-          validateRecord(kind, record);
+          const candidate =
+            record.photos === undefined && original?.photos
+              ? { ...record, photos: original.photos }
+              : record;
+          requireCatalogChange(original, candidate);
+          validateRecord(kind, candidate);
           if (record.ownerId && record.ownerId !== "shared")
             fail("Produto inválido.");
           const payload = {
             id: record.id,
             name: record.name,
             ...(record.deleted ? { deleted: true } : {}),
+            photos: [],
           };
+          for (const photo of candidate.photos || []) {
+            const stored = await db.query(
+              "SELECT * FROM famac.product_photos WHERE id=$1 AND product_id=$2 FOR UPDATE",
+              [photo.id, record.id],
+            );
+            if (!stored.rowCount)
+              fail("Foto indisponível para este produto.", 403);
+            const item = stored.rows[0];
+            payload.photos.push({
+              id: item.id,
+              name: item.name,
+              key: item.object_key,
+              scope: "product",
+            });
+            await db.query(
+              "UPDATE famac.product_photos SET linked=true WHERE id=$1",
+              [item.id],
+            );
+          }
+          for (const photo of original?.photos || []) {
+            if (
+              record.deleted ||
+              !payload.photos.some((item) => item.id === photo.id)
+            )
+              removedProductPhotos.add(photo.id);
+          }
           await db.query(
             "INSERT INTO famac.products(id,name_key,payload) VALUES ($1,$2,$3) ON CONFLICT(id) DO UPDATE SET name_key=excluded.name_key,payload=excluded.payload,updated_at=now()",
             [
@@ -311,6 +343,15 @@ app.put("/state", async (c) => {
     ]);
     const saved = await readState(db, member);
     await db.query("COMMIT");
+    if (removedProductPhotos.size) {
+      // A remoção de arquivos só ocorre depois do salvamento confirmado. A nova
+      // transação confere novamente os vínculos, serializada com outras edições.
+      await deleteUnusedProductPhotos(db, [...removedProductPhotos]).catch(
+        () => {
+          console.error("FAMAC product photo cleanup failed");
+        },
+      );
+    }
     return c.json(saved);
   } catch (error) {
     await db.query("ROLLBACK");
@@ -318,6 +359,109 @@ app.put("/state", async (c) => {
   } finally {
     db.release();
   }
+});
+const isProductPhotoUsed = (row) =>
+  !row.product?.deleted &&
+  (row.product?.photos || []).some((photo) => photo.id === row.id);
+async function productPhotoFor(db, id) {
+  return (
+    await db.query(
+      "SELECT photo.*,product.payload AS product FROM famac.product_photos photo LEFT JOIN famac.products product ON product.id=photo.product_id WHERE photo.id=$1",
+      [id],
+    )
+  ).rows[0];
+}
+async function deleteUnusedProductPhotos(db, ids, required = false) {
+  await db.query("BEGIN");
+  try {
+    await db.query(
+      "SELECT value FROM famac.revision WHERE singleton=true FOR UPDATE",
+    );
+    for (const id of ids) {
+      const row = await productPhotoFor(db, id);
+      if (!row) continue;
+      if (isProductPhotoUsed(row)) {
+        if (required)
+          fail("Remova a foto do produto e salve antes de excluí-la.");
+        continue;
+      }
+      await files.delete(row.object_key);
+      await db.query("DELETE FROM famac.product_photos WHERE id=$1", [id]);
+    }
+    await db.query("COMMIT");
+  } catch (error) {
+    await db.query("ROLLBACK");
+    throw error;
+  }
+}
+app.post("/product-photos", async (c) => {
+  const member = c.get("member");
+  requireCatalogAdmin(member);
+  const { productId, name, content } = await c.req.json();
+  if (
+    !validId(productId) ||
+    typeof name !== "string" ||
+    !name.trim() ||
+    name.length > 255 ||
+    typeof content !== "string" ||
+    !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(content)
+  )
+    fail("Envie uma foto JPG válida para o produto.");
+  const bytes = Buffer.from(content.slice(content.indexOf(",") + 1), "base64");
+  if (
+    bytes.length < 4 ||
+    bytes.length > 5 * 1024 * 1024 ||
+    bytes[0] !== 255 ||
+    bytes[1] !== 216
+  )
+    fail("Foto inválida ou maior que 5 MB após a compressão.");
+  const existing = await pool.query(
+    "SELECT payload FROM famac.products WHERE id=$1",
+    [productId],
+  );
+  if (existing.rows[0]?.payload.deleted) fail("Este produto já foi excluído.");
+  const id = randomUUID();
+  const key = `produtos/${productId}/${id}.jpg`;
+  await files.upload(key, bytes, { contentType: "image/jpeg" });
+  try {
+    await pool.query(
+      "INSERT INTO famac.product_photos(id,product_id,uploaded_by,object_key,name,bytes) VALUES ($1,$2,$3,$4,$5,$6)",
+      [id, productId, member.authId, key, name, bytes.length],
+    );
+  } catch (error) {
+    await files.delete(key).catch(() => {});
+    throw error;
+  }
+  return c.json({ id, key, name, scope: "product" }, 201);
+});
+app.get("/product-photos/:id/url", async (c) => {
+  const id = c.req.param("id");
+  if (!validId(id)) fail("Foto inválida.");
+  const row = await productPhotoFor(pool, id);
+  const member = c.get("member");
+  if (
+    !row ||
+    (!isProductPhotoUsed(row) &&
+      !(
+        member.role === "admin" &&
+        !row.linked &&
+        row.uploaded_by === member.authId
+      ))
+  )
+    fail("Foto indisponível para este produto.", 404);
+  return c.json({ url: await files.url(row.object_key, { expiresIn: 300 }) });
+});
+app.delete("/product-photos/:id", async (c) => {
+  requireCatalogAdmin(c.get("member"));
+  const id = c.req.param("id");
+  if (!validId(id)) fail("Foto inválida.");
+  const db = await pool.connect();
+  try {
+    await deleteUnusedProductPhotos(db, [id], true);
+  } finally {
+    db.release();
+  }
+  return c.body(null, 204);
 });
 app.post("/photos", async (c) => {
   const member = c.get("member");

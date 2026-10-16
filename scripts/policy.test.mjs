@@ -117,6 +117,41 @@ test("edição de produto inicial respeita unicidade e exclusão preserva o cada
   assert.throws(() => validateRecord("works", { deleted: true }));
 });
 
+test("fotos de produtos exigem referências próprias, únicas e no máximo seis imagens", () => {
+  const photo = {
+    id: crypto.randomUUID(),
+    scope: "product",
+    key: "produtos/teste.jpg",
+    name: "Foto",
+  };
+  const product = { name: "GESSO", photos: [photo] };
+  assert.doesNotThrow(() => validateRecord("products", product));
+  assert.throws(() =>
+    validateRecord("products", { ...product, photos: [photo, photo] }),
+  );
+  assert.throws(() =>
+    validateRecord("products", {
+      ...product,
+      photos: [{ ...photo, scope: "visit" }],
+    }),
+  );
+  assert.throws(() =>
+    validateRecord("products", {
+      ...product,
+      photos: [{ ...photo, url: "https://arbitrario.invalid/image.jpg" }],
+    }),
+  );
+  assert.throws(() =>
+    validateRecord("products", {
+      ...product,
+      photos: Array.from({ length: 7 }, () => ({
+        ...photo,
+        id: crypto.randomUUID(),
+      })),
+    }),
+  );
+});
+
 test("arquitetos e empreiteiros compartilhados não liberam contatos privados nem transferência de cargo", () => {
   const member = { role: "collaborator", teamId: "charles" };
   for (const role of ["architect", "contractor"])

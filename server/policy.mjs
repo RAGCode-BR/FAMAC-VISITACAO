@@ -7,6 +7,7 @@ import {
   validateVisit,
 } from "../src/lib/domain.mjs";
 import { isSharedContact } from "../src/lib/contacts.mjs";
+import { MAX_PRODUCT_PHOTOS } from "../src/lib/photo.mjs";
 
 export const collections = ["products", "contacts", "works", "visits", "plans"];
 export const validId = (id) =>
@@ -68,6 +69,21 @@ export function validateRecord(kind, record, allowedProducts = PRODUCTS) {
       record.name !== productName(record.name)
     )
       fail("Informe um nome de produto válido, de até 80 caracteres.");
+    if (
+      record.photos !== undefined &&
+      (!Array.isArray(record.photos) ||
+        record.photos.length > MAX_PRODUCT_PHOTOS ||
+        record.photos.some(
+          (photo) =>
+            !photo ||
+            !validId(photo.id) ||
+            photo.scope !== "product" ||
+            photo.url !== undefined,
+        ) ||
+        new Set(record.photos.map((photo) => photo.id)).size !==
+          record.photos.length)
+    )
+      fail("Fotos do produto inválidas. Adicione no máximo 6 fotos.");
   } else if (kind === "contacts") {
     if (
       typeof record.name !== "string" ||

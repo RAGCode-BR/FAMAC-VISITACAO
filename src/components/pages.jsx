@@ -22,6 +22,11 @@ import {
 } from "../lib/domain.mjs";
 import Pagination from "./Pagination.jsx";
 import VisitPhoto from "./VisitPhoto.jsx";
+import {
+  ProductGallery,
+  ProductImage,
+  ProductPhotoEditor,
+} from "./ProductPhotos.jsx";
 import { contactPhones } from "../lib/contacts.mjs";
 import { teamIndicators } from "../lib/reporting.mjs";
 import { ReportOverview, TeamKpis } from "./ReportInsights.jsx";
@@ -1847,6 +1852,7 @@ export function Catalog({ data, save, canManage = false }) {
   const items = catalogProducts(data);
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [presenting, setPresenting] = useState(null);
   return (
     <>
       <div className="catalog-banner">
@@ -1874,6 +1880,33 @@ export function Catalog({ data, save, canManage = false }) {
                 <span>{String(index + 1).padStart(2, "0")}</span>
                 <Icon name="box" size={24} />
               </div>
+              {!!item.photos?.length && (
+                <div
+                  className="product-cover"
+                  role="group"
+                  aria-label={`Fotos de ${item.name}`}
+                >
+                  <ProductImage
+                    photo={item.photos[0]}
+                    alt={`Capa de ${item.name}`}
+                    retry={false}
+                  />
+                  <button
+                    type="button"
+                    className="product-cover-open"
+                    aria-label={`Ver fotos de ${item.name}`}
+                    onClick={() => setPresenting(item)}
+                  >
+                    <span className="product-cover-count">
+                      <Icon name="camera" size={15} />
+                      Ver{" "}
+                      {item.photos.length === 1
+                        ? "foto"
+                        : `${item.photos.length} fotos`}
+                    </span>
+                  </button>
+                </div>
+              )}
               <h3>{item.name}</h3>
               <p>
                 <strong>{count.offered}</strong> visitas com oferta{" "}
@@ -1918,6 +1951,12 @@ export function Catalog({ data, save, canManage = false }) {
           onClose={() => setEditing(null)}
         />
       )}
+      {presenting && (
+        <ProductGallery
+          product={presenting}
+          onClose={() => setPresenting(null)}
+        />
+      )}
       {deleting && (
         <DeleteRecord
           title="Excluir produto?"
@@ -1939,6 +1978,8 @@ function ProductForm({ initial, data, save, onClose }) {
   const [name, setName] = useState(initial?.name || "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [photos, setPhotos] = useState(initial?.photos || []);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const submit = async (event) => {
     event.preventDefault();
     const clean = productName(name);
@@ -1957,7 +1998,11 @@ function ProductForm({ initial, data, save, onClose }) {
     try {
       await save(
         (current) =>
-          saveProduct(current, { id: initial?.id || uid(), name: clean }),
+          saveProduct(current, {
+            id: initial?.id || uid(),
+            name: clean,
+            photos,
+          }),
         initial
           ? "Produto atualizado."
           : "Produto cadastrado e disponível nas visitas.",
@@ -1972,7 +2017,7 @@ function ProductForm({ initial, data, save, onClose }) {
   return (
     <Modal
       title={initial ? "Editar produto" : "Novo produto"}
-      onClose={onClose}
+      onClose={busy || photoBusy ? () => {} : onClose}
     >
       <form onSubmit={submit}>
         <Field
@@ -1988,16 +2033,27 @@ function ProductForm({ initial, data, save, onClose }) {
               : "Disponível para toda a equipe nas próximas visitas."
           }
         />
+        <ProductPhotoEditor
+          photos={photos}
+          onChange={setPhotos}
+          onBusy={setPhotoBusy}
+          disabled={busy}
+        />
         {error && (
           <p className="error" role="alert">
             {error}
           </p>
         )}
         <footer className="modal-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button
+            type="button"
+            className="button secondary"
+            onClick={onClose}
+            disabled={busy || photoBusy}
+          >
             Cancelar
           </button>
-          <button className="button primary" disabled={busy}>
+          <button className="button primary" disabled={busy || photoBusy}>
             {busy
               ? "Salvando…"
               : initial

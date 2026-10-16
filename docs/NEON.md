@@ -55,18 +55,25 @@ Unificações de nomes com dados diferentes exigem aprovação explícita em um 
 
 Fotos são comprimidas no navegador e enviadas à Function autenticada. O servidor valida JPG e tamanho, gera a chave do objeto e grava no bucket privado. O histórico obtém links de leitura com validade de cinco minutos, somente após verificar a autoria. Fotos não ficam em base64 no banco e não são carregadas em cada relatório.
 
+Produtos têm uma galeria opcional de até seis fotos, inclusive os 14 produtos iniciais. A primeira imagem é a capa; administração pode adicionar, remover e trocar a capa na edição. A galeria está disponível na aba Produtos e em Nova visita, preservando o rascunho e as seleções. Fotos do catálogo são compartilhadas apenas entre contas autorizadas, com URLs temporárias. Upload e exclusão exigem administrador; o servidor valida o vínculo de cada imagem com o produto.
+
+`famac.product_photos` guarda referências a arquivos sob `produtos/<produto>/<foto>.jpg` no mesmo bucket privado `famac-visitas`. Fotografias de visitas continuam em sua tabela e com suas permissões privadas. A migração `004-product-photos.sql` é aditiva. Remover uma foto, substituir uma imagem ou excluir o produto limpa os arquivos sem uso depois do commit, conferindo novamente os vínculos sob a trava de revisão. Uploads de um salvamento recusado são removidos; um commit com resposta incerta preserva os arquivos até sua confirmação. A API preserva fotos existentes quando um cliente antigo omite o campo `photos`.
+
 O sistema exige conexão para entrar e salvar na versão conectada. O rascunho não é uma fila offline. Dados da prévia local continuam isolados e exigem uma importação explícita caso ela venha a ser solicitada.
 
 ## Verificação
 
 ```powershell
 npm test
+npm run test:product-photos
 npm run build
 ```
 
 Para a suíte visual da prévia, iniciar Vite na porta 5174 com `VITE_FAMAC_MODE=local`, depois executar `npm run test:ui`. Os contextos são descartáveis.
 
 `npm run test:features` verifica Contatos/Obras com múltiplas páginas, filtros, cadastro e persistência de produto, uso em venda, KPI, três larguras de tela e PDF. A suíte exige a prévia local antes de inserir dados fictícios em um contexto descartável; não usa a produção. Capturas ficam em `test-results/reports-kpi-*.png`.
+
+`npm run test:product-photos` usa a mesma prévia local para verificar fotos em produtos novos e iniciais, otimização, limites, capa, cancelamento, remoção, persistência e apresentação durante a visita sem perda do rascunho, inclusive em 360px. A suíte Neon também testa upload e leitura privada por outro colaborador, permissões, vínculo da imagem com o produto, remoção real do bucket e limpeza de uploads após um conflito de revisão.
 
 A suíte `npm run test:neon` exige uma branch **temporária** `famac-e2e-*`. Criar uma branch isolada, aplicar a configuração e as migrações e configurar quatro contas exclusivas de teste. Caso seja uma cópia normal da produção, a limpeza e a substituição das contas devem ocorrer somente nessa cópia, sempre verificando o nome da branch. Salvar ambiente em `test-results/neon.env.local` e acessos em `test-results/neon-access.local`, preservando o ambiente de produção. O runner valida o nome da branch, limpa somente suas fixtures, usa contextos descartáveis e verifica login, compartilhamento de contatos, isolamento de obras/fotos, atualização automática com preservação do rascunho, suspensão em segundo plano, relatórios, conflitos, senhas e celular. Ao concluir, excluir a branch temporária. Nunca usar as credenciais de produção para a suíte com fixtures.
 

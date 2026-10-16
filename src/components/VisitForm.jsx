@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  productNames,
+  catalogProducts,
   TEAM,
   STAGES,
   addressLabel,
@@ -11,31 +11,8 @@ import {
   today,
 } from "../lib/domain.mjs";
 import { AddressFields, ContactPicker, Field, Icon, Select } from "./ui.jsx";
-
-async function preparePhoto(file) {
-  if (!file.type.startsWith("image/"))
-    throw new Error("Selecione um arquivo de imagem.");
-  if (file.size > 12 * 1024 * 1024)
-    throw new Error("Cada foto pode ter até 12 MB.");
-  const image = await createImageBitmap(file);
-  try {
-    const ratio = Math.min(1, 1600 / Math.max(image.width, image.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(image.width * ratio);
-    canvas.height = Math.round(image.height * ratio);
-    const context = canvas.getContext("2d");
-    context.fillStyle = "#fff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    return {
-      id: crypto.randomUUID(),
-      name: file.name,
-      url: canvas.toDataURL("image/jpeg", 0.82),
-    };
-  } finally {
-    image.close();
-  }
-}
+import { preparePhoto } from "../lib/photo.mjs";
+import { ProductGallery } from "./ProductPhotos.jsx";
 
 export default function VisitForm({
   data,
@@ -66,6 +43,7 @@ export default function VisitForm({
         }
       : base;
   };
+  const [presenting, setPresenting] = useState(null);
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -360,7 +338,8 @@ export default function VisitForm({
             </span>
           </div>
           <div className="product-grid">
-            {productNames(data).map((product, index) => {
+            {catalogProducts(data).map((item, index) => {
+              const product = item.name;
               const selected = form.offered.includes(product);
               const sold = form.sold.includes(product);
               return (
@@ -382,6 +361,17 @@ export default function VisitForm({
                     </span>
                     <span>{product}</span>
                   </label>
+                  {!!item.photos?.length && (
+                    <button
+                      type="button"
+                      className="product-photo-link"
+                      aria-label={`Ver fotos de ${product}`}
+                      onClick={() => setPresenting(item)}
+                    >
+                      <Icon name="camera" size={16} />
+                      Ver fotos
+                    </button>
+                  )}
                   {selected && (
                     <label className="sold-choice">
                       <input
@@ -403,6 +393,12 @@ export default function VisitForm({
               );
             })}
           </div>
+          {presenting && (
+            <ProductGallery
+              product={presenting}
+              onClose={() => setPresenting(null)}
+            />
+          )}
           <div className="fields two">
             <Select
               label="Tipo de visita"

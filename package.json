@@ -14,6 +14,7 @@
     "neon:client-env": "node scripts/neon-client-env.mjs",
     "test:ui": "node scripts/smoke.mjs",
     "test:features": "node scripts/features-ui.mjs",
+    "test:product-photos": "node scripts/product-photos-ui.mjs",
     "test:neon": "node --env-file=test-results/neon.env.local scripts/neon-e2e.mjs",
     "test:pages": "node scripts/check-pages.mjs",
     "test:cep": "node scripts/cep-ui.mjs"

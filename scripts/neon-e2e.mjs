@@ -34,7 +34,7 @@ await reset.connect();
 try {
   await reset.query("BEGIN");
   await reset.query(
-    "TRUNCATE famac.products, famac.photos, famac.operations, famac.plans, famac.visits, famac.works, famac.contacts",
+    "TRUNCATE famac.product_photos, famac.products, famac.photos, famac.operations, famac.plans, famac.visits, famac.works, famac.contacts",
   );
   await reset.query("UPDATE famac.revision SET value=0 WHERE singleton=true");
   await reset.query(
@@ -461,13 +461,75 @@ try {
     .getByRole("dialog")
     .getByLabel("Nome do produto", { exact: false })
     .fill(customProduct);
+  const imageBytes = await readFile("public/famac-logo.jpg");
+  await management.page
+    .getByRole("dialog")
+    .getByLabel("Selecionar fotos do produto")
+    .setInputFiles([
+      { name: "acabamento-1.jpg", mimeType: "image/jpeg", buffer: imageBytes },
+      { name: "acabamento-2.jpg", mimeType: "image/jpeg", buffer: imageBytes },
+    ]);
+  await management.page
+    .locator(".product-photo-previews article")
+    .nth(1)
+    .waitFor();
   await management.page
     .getByRole("dialog")
     .getByRole("button", { name: "Cadastrar produto", exact: true })
     .click();
-  await management.page.getByRole("dialog").waitFor({ state: "hidden" });
+  await management.page
+    .getByRole("dialog")
+    .waitFor({ state: "hidden", timeout: 45000 });
   const catalogState = (await call(management.page, "/state")).data;
   assert.equal(catalogState.products[0].name, customProduct);
+  const productPhotos = catalogState.products[0].photos;
+  assert.equal(productPhotos.length, 2);
+  assert.ok(
+    productPhotos.every(
+      (item) => item.scope === "product" && item.key.startsWith("produtos/"),
+    ),
+  );
+  assert.equal(JSON.stringify(catalogState).includes("data:image/"), false);
+  const productSignedUrl = (
+    await call(first.page, `/product-photos/${productPhotos[0].id}/url`)
+  ).data.url;
+  assert.equal((await fetch(productSignedUrl)).status, 200);
+  const unsignedProductUrl = new URL(productSignedUrl);
+  unsignedProductUrl.search = "";
+  assert.ok(
+    (await fetch(unsignedProductUrl)).status >= 400,
+    "Fotos do catálogo ficam no bucket privado",
+  );
+  assert.equal(
+    (
+      await call(first.page, "/product-photos", {
+        method: "POST",
+        body: JSON.stringify({
+          productId: catalogState.products[0].id,
+          name: "Proibida.jpg",
+          content: "data:image/jpeg;base64,/9j/2Q==",
+        }),
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await call(first.page, `/product-photos/${productPhotos[0].id}`, {
+        method: "DELETE",
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await call(management.page, `/product-photos/${productPhotos[0].id}`, {
+        method: "DELETE",
+      })
+    ).status,
+    400,
+    "Foto vinculada não pode ser removida diretamente",
+  );
   const legacy = structuredClone(catalogState);
   delete legacy.products;
   assert.equal(
@@ -492,6 +554,28 @@ try {
   await first.page
     .getByLabel(`Oferecer ${customProduct}`, { exact: true })
     .waitFor();
+  const preservedDraft = await first.page
+    .getByLabel("Nome / identificação da obra", { exact: false })
+    .inputValue();
+  await first.page
+    .getByRole("button", { name: `Ver fotos de ${customProduct}`, exact: true })
+    .click();
+  await first.page
+    .locator(".product-gallery-stage img")
+    .evaluate((image) => image.decode());
+  await first.page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Fechar janela", exact: true })
+    .click();
+  assert.equal(
+    await first.page
+      .getByLabel("Nome / identificação da obra", { exact: false })
+      .inputValue(),
+    preservedDraft,
+  );
+  console.log(
+    "PASS: upload de produto, bucket privado, links autenticados compartilhados, gestão só por admin e galeria na visita sem perder rascunho",
+  );
   console.log(
     "PASS: catálogo compartilhado, criação restrita à administração, navegador antigo preserva produtos e novo produto chega por atualização automática",
   );
@@ -543,6 +627,25 @@ try {
   await celso.page
     .getByRole("heading", { name: customProduct, exact: true })
     .waitFor();
+  assert.equal(await celso.page.locator(".product-record-actions").count(), 0);
+  await celso.page
+    .getByRole("button", { name: `Ver fotos de ${customProduct}`, exact: true })
+    .click();
+  await celso.page
+    .locator(".product-gallery-stage img")
+    .evaluate((image) => image.decode());
+  await celso.page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Próxima foto", exact: true })
+    .click();
+  await celso.page
+    .getByRole("dialog")
+    .getByText("Foto 2 de 2", { exact: true })
+    .waitFor();
+  await celso.page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Fechar janela", exact: true })
+    .click();
   console.log(
     "PASS: administração cadastra para o colaborador selecionado e Celso consulta somente sua visita",
   );
@@ -599,6 +702,136 @@ try {
       }),
     });
   };
+  // Fotos também podem ser incluídas nos produtos iniciais e removidas sem
+  // deixar arquivos sem uso; uma falha de revisão conserva a edição local.
+  await management.page.reload();
+  await management.page.locator(".visit-form").waitFor();
+  await navigate(management.page, "Produtos");
+  await management.page
+    .getByRole("button", { name: "Editar FORRO", exact: true })
+    .click();
+  await management.page
+    .getByRole("dialog")
+    .getByLabel("Selecionar fotos do produto")
+    .setInputFiles("public/famac-logo.jpg");
+  await management.page.locator(".product-photo-previews img").waitFor();
+  await management.page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Salvar produto", exact: true })
+    .click();
+  await management.page
+    .getByRole("dialog")
+    .waitFor({ state: "hidden", timeout: 45000 });
+  assert.equal(
+    (
+      await commitState(management.page, (state) =>
+        saveProduct(state, {
+          ...catalogProducts(state).find((item) => item.name === "FORRO"),
+          photos: [productPhotos[0]],
+        }),
+      )
+    ).status,
+    403,
+    "Foto de outro produto não pode ser reaproveitada por referência",
+  );
+  await management.page
+    .getByRole("button", { name: `Editar ${customProduct}`, exact: true })
+    .click();
+  await management.page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Remover foto 1", exact: true })
+    .click();
+  await management.page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Salvar produto", exact: true })
+    .click();
+  await management.page
+    .getByRole("dialog")
+    .waitFor({ state: "hidden", timeout: 45000 });
+  assert.equal(
+    (await call(first.page, `/product-photos/${productPhotos[0].id}/url`))
+      .status,
+    404,
+  );
+  assert.ok(
+    (await fetch(productSignedUrl)).status >= 400,
+    "Arquivo removido não deve permanecer no bucket",
+  );
+  await management.page
+    .getByRole("button", { name: "Editar FORRO", exact: true })
+    .click();
+  await management.page
+    .getByRole("dialog")
+    .getByLabel("Selecionar fotos do produto")
+    .setInputFiles("public/famac-logo.jpg");
+  await management.page
+    .locator(".product-photo-previews article")
+    .nth(1)
+    .waitFor();
+  assert.equal(
+    (await commitState(first.page, (state) => state, "claudionor")).status,
+    200,
+  );
+  await management.page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Salvar produto", exact: true })
+    .click();
+  await management.page
+    .getByRole("dialog")
+    .getByRole("alert")
+    .getByText(/registros foram atualizados/)
+    .waitFor({ timeout: 45000 });
+  const photoDb = new pg.Client({
+    connectionString: connectionString(process.env.DATABASE_URL),
+  });
+  await photoDb.connect();
+  try {
+    assert.equal(
+      (
+        await photoDb.query(
+          "SELECT count(*)::int AS n FROM famac.product_photos WHERE linked=false",
+        )
+      ).rows[0].n,
+      0,
+      "Upload do salvamento recusado deve ser limpo",
+    );
+  } finally {
+    await photoDb.end();
+  }
+  assert.equal(
+    await management.page.locator(".product-photo-previews article").count(),
+    2,
+  );
+  await management.page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Salvar produto", exact: true })
+    .click();
+  await management.page
+    .getByRole("dialog")
+    .waitFor({ state: "hidden", timeout: 45000 });
+  assert.equal(
+    (
+      await commitState(management.page, (state) => ({
+        ...state,
+        products: state.products.map((item) => {
+          if (item.name !== customProduct) return item;
+          const { photos: _photos, ...legacyProduct } = item;
+          return legacyProduct;
+        }),
+      }))
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await call(first.page, "/state")).data.products.find(
+      (item) => item.name === customProduct,
+    ).photos.length,
+    1,
+    "Navegador antigo preserva as fotos",
+  );
+  console.log(
+    "PASS: fotos em produto inicial, vínculo validado, remoção real do bucket, conflito sem perda do formulário nem uploads órfãos e compatibilidade com navegador antigo",
+  );
   for (const name of ["FORRO", customProduct]) {
     const getItem = (state) =>
       catalogProducts(state).find((item) => item.name === name);
@@ -643,6 +876,12 @@ try {
     );
   }
   const sharedBefore = (await call(recovered.page, "/state")).data;
+  assert.equal(
+    (await call(first.page, `/product-photos/${productPhotos[1].id}/url`))
+      .status,
+    404,
+    "Excluir produto remove acesso às fotos",
+  );
   const linkedArchitect = sharedBefore.visits.find(
     (item) => item.architectId,
   )?.architectId;

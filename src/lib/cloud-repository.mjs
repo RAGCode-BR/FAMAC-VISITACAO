@@ -12,11 +12,13 @@ export const cloudRepository = {
   sync(revision, signal) {
     return api(`/state?since=${revision}`, { signal });
   },
-  async photoUrl(photo) {
+  async photoUrl(photo, refresh = false) {
     if (photo.url && !photo.key) return photo.url;
-    const cached = photoCache.get(photo.id);
+    const cached = !refresh && photoCache.get(photo.id);
     if (cached && cached.until > Date.now()) return cached.url;
-    const { url } = await api(`/photos/${photo.id}/url`);
+    const { url } = await api(
+      `/${photo.scope === "product" ? "product-photos" : "photos"}/${photo.id}/url`,
+    );
     photoCache.set(photo.id, { url, until: Date.now() + 240000 });
     return url;
   },
@@ -39,8 +41,25 @@ export const cloudRepository = {
               content: photo.url,
             }),
           });
-          uploaded.push(remote.id);
+          uploaded.push(`/photos/${remote.id}`);
           visit.photos[index] = remote;
+        }
+      }
+      for (const product of state.products || []) {
+        if (product.deleted) continue;
+        for (let index = 0; index < (product.photos || []).length; index++) {
+          const photo = product.photos[index];
+          if (photo.key) continue;
+          const remote = await api("/product-photos", {
+            method: "POST",
+            body: JSON.stringify({
+              productId: product.id,
+              name: photo.name,
+              content: photo.url,
+            }),
+          });
+          uploaded.push(`/product-photos/${remote.id}`);
+          product.photos[index] = remote;
         }
       }
       try {
@@ -71,7 +90,7 @@ export const cloudRepository = {
       // Não remover fotos enquanto um COMMIT sem resposta ainda pode concluir.
       if (!uncertainCommit)
         await Promise.allSettled(
-          uploaded.map((id) => api(`/photos/${id}`, { method: "DELETE" })),
+          uploaded.map((path) => api(path, { method: "DELETE" })),
         );
       throw error;
     }

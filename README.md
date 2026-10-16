@@ -35,9 +35,10 @@ O build está em `dist/`; a prévia do build usa **http://127.0.0.1:4174/**. Cad
 - Programação por dia/semana/mês, retorno opcional ao registrar visita, conclusão e motivo de não realização.
 - Cadastro e edição de obras e contatos, com paginação de 12 registros e filtros sobre a lista completa. Contatos podem ser excluídos com confirmação, preservando vínculos e histórico.
 - Catálogo com 14 produtos iniciais e novos produtos, disponíveis para toda a equipe. A administração pode cadastrar, editar e excluir qualquer produto; alterações de nome valem para as próximas visitas e o histórico mantém o nome original.
+- Cada produto pode ter até 6 fotos, com capa e galeria ampliada no catálogo e na tela Nova visita. A administração inclui e remove imagens no cadastro ou edição; toda a equipe pode apresentá-las aos clientes sem alterar o rascunho da visita.
 - Visão geral, equipe e relatórios com filtros combinados, rankings, exportação CSV e impressão/PDF.
 - Login com PIN e senha, alteração de senha e redefinição pela administração, sem e-mail de acesso.
-- Integração com Postgres, Auth, Functions e Object Storage do Neon. Arquitetos e empreiteiros são compartilhados; obras, visitas, programação e fotos ficam restritos ao colaborador. A administração consulta a equipe.
+- Integração com Postgres, Auth, Functions e Object Storage do Neon. Arquitetos, empreiteiros e fotos do catálogo são compartilhados; obras, visitas, programação e fotos das visitas ficam restritos ao colaborador. A administração consulta a equipe.
 
 Os nomes **Claudionor, Charles e Celso** são os colaboradores configurados. Na versão conectada, a identidade vem da sessão autenticada. Na prévia local isolada, a seleção de perfil serve somente para testes.
 
