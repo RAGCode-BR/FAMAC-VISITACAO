@@ -3,6 +3,12 @@
   justify-content: flex-end;
   margin: -4px 0 22px;
 }
+.catalog-card h3,
+.product-choice > span:last-child,
+.product-chart-row > button {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .reports-page > .metrics {
   gap: 18px;
 }

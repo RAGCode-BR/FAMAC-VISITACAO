@@ -256,6 +256,15 @@ try {
     printBackground: true,
   });
   assert.ok(pdf.length > 10000);
+  // O limite permitido no cadastro também precisa caber na tela do celular.
+  await navigate("Produtos");
+  await page.getByRole("button", { name: "Novo produto", exact: true }).click();
+  await page.getByRole("dialog").getByLabel("Nome do produto", { exact: false }).fill("A".repeat(80));
+  await page.getByRole("dialog").getByRole("button", { name: "Cadastrar produto", exact: true }).click();
+  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  await fits();
+  await navigate("Nova visita");
+  await fits();
   assert.deepEqual(errors, []);
   console.log(
     "PASS: gráficos/KPI respeitam filtros, computador/tablet/celular sem transbordamento e PDF gerado",
