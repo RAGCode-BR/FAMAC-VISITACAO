@@ -537,6 +537,11 @@ button:disabled:hover {
   font-weight: 750;
   border: 3px solid #fafbfe;
 }
+.profile-name {
+  color: var(--navy);
+  font-size: 14px;
+  font-weight: 700;
+}
 .profile-select {
   display: grid;
   gap: 1px;

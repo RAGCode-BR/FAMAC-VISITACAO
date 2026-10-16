@@ -371,21 +371,24 @@ function App({ account, onLogout }) {
             <span className="avatar">
               {account?.role === "admin" ? "AD" : user.initials}
             </span>
-            <label className="profile-select">
-              <span>{account ? account.name : "Colaborador na prévia"}</span>
-              <select
-                aria-label={account ? "Colaborador" : "Colaborador na prévia"}
-                value={userId}
-                onChange={(event) => selectCollaborator(event.target.value)}
-                disabled={!canAssign}
-              >
-                {TEAM.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {canAssign ? (
+              <label className="profile-select">
+                <span>{account ? account.name : "Colaborador na prévia"}</span>
+                <select
+                  aria-label={account ? "Colaborador" : "Colaborador na prévia"}
+                  value={userId}
+                  onChange={(event) => selectCollaborator(event.target.value)}
+                >
+                  {TEAM.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <strong className="profile-name">{account.name}</strong>
+            )}
             {account && (
               <div className="cloud-account-actions">
                 <button

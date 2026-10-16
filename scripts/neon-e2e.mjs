@@ -165,7 +165,8 @@ try {
   const charles = accounts.find((item) => item.teamId === "charles");
   const admin = accounts.find((item) => item.role === "admin");
   const first = await login(claudi);
-  assert.equal(await first.page.locator(".topbar select").isDisabled(), true);
+  assert.equal(await first.page.locator(".topbar select").count(), 0);
+  assert.equal(await first.page.locator(".profile-name").textContent(), claudi.name);
   await first.page.reload();
   await first.page.locator(".visit-form").waitFor();
   console.log(
