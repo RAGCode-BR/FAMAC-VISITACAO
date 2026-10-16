@@ -234,6 +234,7 @@ export function VisitDetail({ visit, onClose }) {
       </dl>
       <h3 className="detail-heading">Produtos oferecidos</h3>
       <div className="tag-list">
+        {visit.offered.length === 0 && <span>Nenhum produto registrado.</span>}
         {visit.offered.map((item) => (
           <Badge
             key={item}
@@ -406,7 +407,7 @@ export function Dashboard({ data, navigate, onDetail }) {
             </div>
             <Icon name="box" />
           </div>
-          {stats.visits ? (
+          {stats.products.some((item) => item.offered) ? (
             <Ranking
               items={stats.products
                 .filter((item) => item.offered)

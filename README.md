@@ -29,6 +29,7 @@ O build está em `dist/`; a prévia do build usa **http://127.0.0.1:4174/**. Cad
 - Obras com endereço completo, bairro obrigatório e consulta de CEP ao sair do campo completo (Tab no computador ou troca de campo no celular). O botão também permite buscar novamente; preenchimento manual continua disponível.
 - Responsável e telefone opcionais para a prospecção inicial (quando preenchido, telefone exige DDD); empreiteiro e arquiteto com busca e cadastro na própria visita.
 - Tipos comercial e residencial; seleção de múltiplos produtos oferecidos e vendidos.
+- Visitas de Relacionamento podem ser registradas sem produtos; em Prospecção e Fechamento, a seleção de produto continua obrigatória.
 - Fotos por câmera/galeria, com até 6 imagens, limitadas a 12 MB por arquivo antes da otimização local.
 - Histórico de visitas e detalhes com fotos, observações e próxima ação.
 - Programação por dia/semana/mês, retorno opcional ao registrar visita, conclusão e motivo de não realização.

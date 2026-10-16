@@ -339,7 +339,11 @@ export default function VisitForm({
             <span className="section-number">04</span>
             <div>
               <h2>Produtos e oportunidades</h2>
-              <p>Marque o que foi oferecido e sinalize as vendas.</p>
+              <p>
+                {form.stage === "relationship" && !form.sold.length
+                  ? "Em visitas de relacionamento, os produtos são opcionais."
+                  : "Marque o que foi oferecido e sinalize as vendas."}
+              </p>
             </div>
             <Icon name="box" />
           </div>

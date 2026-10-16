@@ -116,7 +116,7 @@ export function validateVisit(visit) {
     throw new Error("Selecione o tipo de obra.");
   if (!Object.hasOwn(STAGES, visit.stage))
     throw new Error("Selecione o tipo de visita.");
-  if (!visit.offered.length)
+  if (visit.stage !== "relationship" && !visit.offered.length)
     throw new Error("Selecione pelo menos um produto oferecido.");
   if (
     [...visit.offered, ...visit.sold].some(

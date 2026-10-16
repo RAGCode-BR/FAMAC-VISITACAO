@@ -297,6 +297,47 @@ try {
     "PASS: persistência após recarga, obra existente reaproveitada e programação concluída",
   );
 
+  await navigate("Nova visita");
+  await page
+    .getByLabel("Vincular a uma obra existente", { exact: true })
+    .selectOption({ index: 1 });
+  await page
+    .getByLabel("Tipo de visita", { exact: true })
+    .selectOption("relationship");
+  await page
+    .getByText("Em visitas de relacionamento, os produtos são opcionais.")
+    .waitFor();
+  await page
+    .getByLabel("O que foi conversado / oferecido?", { exact: true })
+    .fill("Acompanhar andamento da obra");
+  await page
+    .getByRole("button", { name: "Registrar visita", exact: true })
+    .click();
+  await page
+    .getByText("Visita registrada com sucesso.", { exact: true })
+    .waitFor();
+  await navigate("Relatórios");
+  await page
+    .locator(".reports-page")
+    .getByLabel("Tipo de visita", { exact: true })
+    .selectOption("relationship");
+  assert.equal(
+    await page.locator(".metric").first().locator("strong").innerText(),
+    "1",
+  );
+  await page
+    .getByRole("button", { name: "Detalhes de Obra teste de integração" })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByText("Nenhum produto registrado.")
+    .waitFor();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Fechar detalhes" })
+    .click();
+  console.log("PASS: relacionamento sem produtos salvo e exibido nos relatórios");
+
   // Todas as telas em celular pequeno e navegação por teclado.
   await page.setViewportSize({ width: 360, height: 800 });
   for (const label of [

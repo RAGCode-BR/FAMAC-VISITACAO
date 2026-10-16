@@ -63,6 +63,36 @@ test("bairro obrigatório, telefone com DDD, datas e coerência de produtos", ()
     /próxima visita/,
   );
 });
+test("relacionamento pode ser salvo sem produtos e permanece nos relatórios", () => {
+  const relationship = draft({
+    stage: "relationship",
+    offered: [],
+    sold: [],
+    notes: "Acompanhar andamento da obra",
+  });
+  assert.doesNotThrow(() => validateVisit(relationship));
+  assert.throws(
+    () => validateVisit({ ...relationship, stage: "prospecting" }),
+    /produto oferecido/,
+  );
+  assert.throws(
+    () => validateVisit({ ...relationship, stage: "closing" }),
+    /produto oferecido/,
+  );
+  assert.throws(
+    () => validateVisit({ ...relationship, saleValue: "500" }),
+    /produto vendido/,
+  );
+  const data = recordVisit(emptyData(), relationship, ids);
+  assert.equal(data.visits[0].stage, "relationship");
+  assert.deepEqual(data.visits[0].offered, []);
+  assert.deepEqual(data.visits[0].sold, []);
+  assert.equal(data.visits[0].saleValue, 0);
+  const filtered = filterVisits(data.visits, { stage: "relationship" });
+  assert.equal(filtered.length, 1);
+  assert.equal(summarize(filtered).visits, 1);
+  assert.equal(summarize(filtered).products.some((item) => item.offered), false);
+});
 test("uma visita cria obra e retorno na mesma alteração sem modificar o estado anterior", () => {
   const before = emptyData();
   const next = recordVisit(
