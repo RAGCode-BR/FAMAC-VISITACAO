@@ -4,6 +4,7 @@ import { TEAM, emptyData, today } from "./lib/domain.mjs";
 import { repository } from "./lib/repository.mjs";
 import { Badge, Icon, Modal } from "./components/ui.jsx";
 import VisitForm from "./components/VisitForm.jsx";
+import AuthGate, { PasswordForm } from "./components/AuthGate.jsx";
 import {
   Catalog,
   Contacts,
@@ -17,6 +18,7 @@ import {
 } from "./components/pages.jsx";
 import "./styles.css";
 import "./readability.css";
+import "./auth.css";
 
 const NAV = [
   ["overview", "grid", "Visão geral"],
@@ -87,8 +89,8 @@ class AppBoundary extends React.Component {
       <main className="startup">
         <h1>Não foi possível abrir esta tela.</h1>
         <p>
-          Recarregue a página para tentar novamente. Os registros salvos
-          permanecem neste navegador.
+          Recarregue a página para tentar novamente. Os registros já salvos
+          serão carregados novamente.
         </p>
         <button className="button primary" onClick={() => location.reload()}>
           Recarregar
@@ -100,7 +102,8 @@ class AppBoundary extends React.Component {
   }
 }
 
-function App() {
+function App({ account, onLogout }) {
+  const canAssign = !account || account.role === "admin";
   const [data, setData] = useState(emptyData);
   const dataRef = useRef(data);
   const saving = useRef(false);
@@ -108,7 +111,8 @@ function App() {
   const [loadError, setLoadError] = useState("");
   const [page, setPage] = useState("new");
   const [navOpen, setNavOpen] = useState(false);
-  const [userId, setUserId] = useState("claudionor");
+  const [userId, setUserId] = useState(account?.teamId || "claudionor");
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [detail, setDetail] = useState(null);
   const [activePlan, setActivePlan] = useState(null);
@@ -117,6 +121,9 @@ function App() {
   const [pendingPlan, setPendingPlan] = useState(null);
   const navRef = useRef(null);
   const menuRef = useRef(null);
+  useEffect(() => {
+    repository.setActor(userId);
+  }, [userId]);
   useEffect(() => {
     let active = true;
     repository
@@ -187,11 +194,18 @@ function App() {
     saving.current = true;
     try {
       const next = updater(dataRef.current);
-      await repository.save(next);
-      dataRef.current = next;
-      setData(next);
+      const persisted = await repository.save(next);
+      dataRef.current = persisted;
+      setData(persisted);
       setNotice(message);
-      return next;
+      return persisted;
+    } catch (error) {
+      if (error.status === 409) {
+        const latest = await repository.load();
+        dataRef.current = latest;
+        setData(latest);
+      }
+      throw error;
     } finally {
       saving.current = false;
     }
@@ -200,6 +214,21 @@ function App() {
     setPage(next);
     setNavOpen(false);
     window.scrollTo({ top: 0 });
+  };
+  const selectCollaborator = (next) => {
+    if (!account) return setUserId(next);
+    if (
+      dirty &&
+      !window.confirm(
+        "Trocar de colaborador e descartar a visita ainda não salva?",
+      )
+    )
+      return;
+    setUserId(next);
+    setActivePlan(null);
+    setFormKey((key) => key + 1);
+    setDirty(false);
+    navigate("new");
   };
   const openVisit = (plan) => {
     setActivePlan({ ...plan, userId: plan.userId || userId });
@@ -213,6 +242,19 @@ function App() {
     else openVisit(plan);
   };
   const user = TEAM.find((item) => item.id === userId);
+  const operationalData =
+    account?.role === "admin"
+      ? {
+          ...data,
+          ...Object.fromEntries(
+            ["works", "contacts", "visits", "plans"].map((key) => [
+              key,
+              data[key].filter((item) => item.ownerId === userId),
+            ]),
+          ),
+        }
+      : data;
+  const navigation = NAV.filter(([id]) => id !== "team" || canAssign);
   const metadata = PAGE[page];
   if (loading || loadError)
     return (
@@ -223,7 +265,7 @@ function App() {
         />
         <h1>
           {loadError
-            ? "Precisamos de acesso ao armazenamento"
+            ? "Não foi possível carregar os registros"
             : "Preparando suas próximas conexões…"}
         </h1>
         {loadError && (
@@ -268,7 +310,7 @@ function App() {
         </div>
         <span className="nav-group-label">SEU ESPAÇO DE CONEXÕES</span>
         <nav aria-label="Navegação principal">
-          {NAV.map(([id, icon, label]) => (
+          {navigation.map(([id, icon, label]) => (
             <button
               key={id}
               aria-label={label}
@@ -326,13 +368,16 @@ function App() {
               })}
             </span>
             <span className="topbar-divider" />
-            <span className="avatar">{user.initials}</span>
+            <span className="avatar">
+              {account?.role === "admin" ? "AD" : user.initials}
+            </span>
             <label className="profile-select">
-              <span>Colaborador na prévia</span>
+              <span>{account ? account.name : "Colaborador na prévia"}</span>
               <select
-                aria-label="Colaborador na prévia"
+                aria-label={account ? "Colaborador" : "Colaborador na prévia"}
                 value={userId}
-                onChange={(event) => setUserId(event.target.value)}
+                onChange={(event) => selectCollaborator(event.target.value)}
+                disabled={!canAssign}
               >
                 {TEAM.map((item) => (
                   <option key={item.id} value={item.id}>
@@ -341,6 +386,51 @@ function App() {
                 ))}
               </select>
             </label>
+            {account && (
+              <div className="cloud-account-actions">
+                <button
+                  className="button secondary"
+                  onClick={async () => {
+                    if (saving.current) return;
+                    try {
+                      const latest = await repository.load();
+                      dataRef.current = latest;
+                      setData(latest);
+                      setNotice("Registros atualizados.");
+                    } catch (error) {
+                      setNotice(error.message);
+                    }
+                  }}
+                >
+                  Atualizar
+                </button>
+                <button
+                  className="button secondary"
+                  onClick={() => setPasswordOpen(true)}
+                >
+                  Alterar senha
+                </button>
+                <button
+                  className="button secondary"
+                  onClick={async () => {
+                    if (
+                      dirty &&
+                      !window.confirm(
+                        "Há uma visita em preenchimento. Sair e descartar os campos ainda não salvos?",
+                      )
+                    )
+                      return;
+                    try {
+                      await onLogout();
+                    } catch (error) {
+                      setNotice(error.message);
+                    }
+                  }}
+                >
+                  Sair
+                </button>
+              </div>
+            )}
           </div>
         </header>
         <main id="main-content" tabIndex={-1}>
@@ -352,21 +442,25 @@ function App() {
             </div>
             <span className="preview-pill">
               <i />
-              Prévia local
+              {account ? "Conectado" : "Prévia local"}
             </span>
           </div>
           <div className="local-notice">
             <Icon name="info" size={16} />
             <p>
-              Os registros ficam somente neste navegador. Esta prévia ainda não
-              possui login nem sincronização entre dispositivos.
+              {account
+                ? account.role === "admin"
+                  ? "Acesso de administração. Consulte toda a equipe nos relatórios; use o seletor de colaborador para cadastrar e acompanhar suas obras."
+                  : "Seu acesso mostra somente seus registros. As visitas e fotos são salvas para você consultar em outros dispositivos."
+                : "Os registros ficam somente neste navegador. Esta prévia ainda não possui login nem sincronização entre dispositivos."}
             </p>
           </div>
           <div hidden={page !== "new"}>
             <VisitForm
               key={formKey}
-              data={data}
+              data={operationalData}
               userId={userId}
+              canAssign={!account}
               save={save}
               plan={activePlan}
               onDirty={setDirty}
@@ -398,23 +492,29 @@ function App() {
             </section>
           )}
           {page === "works" && (
-            <Works data={data} save={save} onVisit={startVisit} />
+            <Works data={operationalData} save={save} onVisit={startVisit} />
           )}
           {page === "contacts" && (
-            <Contacts data={data} save={save} onDetail={setDetail} />
+            <Contacts data={operationalData} save={save} onDetail={setDetail} />
           )}
           {page === "schedule" && (
             <Schedule
-              data={data}
+              data={operationalData}
               userId={userId}
+              canAssign={!account}
               save={save}
               onVisit={startVisit}
             />
           )}
           {page === "reports" && <Reports data={data} onDetail={setDetail} />}
           {page === "catalog" && <Catalog data={data} />}
-          {page === "team" && (
-            <Team data={data} userId={userId} onUserChange={setUserId} />
+          {page === "team" && canAssign && (
+            <Team
+              data={data}
+              userId={userId}
+              onUserChange={selectCollaborator}
+              account={account}
+            />
           )}
           <footer className="workspace-footer">
             <span>
@@ -440,6 +540,7 @@ function App() {
         </div>
       )}
       {detail && <VisitDetail visit={detail} onClose={() => setDetail(null)} />}
+      {passwordOpen && <PasswordForm onClose={() => setPasswordOpen(false)} />}
       {pendingPlan && (
         <Modal title="Abrir outra visita?" onClose={() => setPendingPlan(null)}>
           <p>
@@ -468,6 +569,14 @@ function App() {
 
 createRoot(document.getElementById("root")).render(
   <AppBoundary>
-    <App />
+    <AuthGate>
+      {(account, logout) => (
+        <App
+          key={account?.authId || "local"}
+          account={account}
+          onLogout={logout}
+        />
+      )}
+    </AuthGate>
   </AppBoundary>,
 );

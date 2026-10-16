@@ -6,7 +6,7 @@ O projeto original não foi modificado. Nenhum banco, credencial, usuário, cada
 
 ## Executar no computador
 
-Requer Node.js 20.19+ ou 22.12+ e npm.
+Requer Node.js 24 e npm.
 
 ```powershell
 cd C:\Dev\famac
@@ -35,20 +35,22 @@ O build está em `dist/`; a prévia do build usa **http://127.0.0.1:4174/**. Cad
 - Programação por dia/semana/mês, retorno opcional ao registrar visita, conclusão e motivo de não realização.
 - Cadastro e edição de obras e contatos; portfólio dos 14 produtos.
 - Visão geral, equipe e relatórios com filtros combinados, rankings, exportação CSV e impressão/PDF.
+- Login com PIN e senha, alteração de senha e redefinição pela administração, sem e-mail de acesso.
+- Integração com Postgres, Auth, Functions e Object Storage do Neon. Colaboradores acessam somente seus próprios registros; a administração consulta a equipe.
 
-Os nomes **Claudionor, Charles e Celso** são os colaboradores configurados para a prévia. A seleção de perfil **não é autenticação** e não restringe acesso aos dados.
+Os nomes **Claudionor, Charles e Celso** são os colaboradores configurados. Na versão conectada, a identidade vem da sessão autenticada. Na prévia local isolada, a seleção de perfil serve somente para testes.
 
-## Dados e banco futuro
+## Dados e banco Neon
 
-A aplicação inicia sem obras, contatos, visitas ou programações. Produtos e nomes dos colaboradores são a configuração informada pelo usuário, não dados importados.
+A aplicação inicia sem obras, contatos, visitas ou programações. Produtos e nomes dos colaboradores são a configuração informada pelo usuário, não dados importados. O projeto Neon é exclusivo da FAMAC, na região N. Virginia; a API autentica a sessão e verifica a autoria dos registros antes de acessar o banco ou as fotos.
 
-Os registros feitos na prévia são gravados **somente no IndexedDB deste navegador**, no armazenamento `famac-visitacao-local-v1`. Não existe conexão com Supabase, API própria ou banco remoto. Não há sincronização entre computadores, celulares, navegadores ou portas. Limpar os dados do site remove os registros locais. O formulário em andamento é mantido ao navegar entre telas; ao recarregar, o navegador avisa sobre alterações ainda não salvas.
+Na versão conectada, os registros são gravados no Postgres por uma Neon Function; fotos comprimidas ficam no bucket privado `famac-visitas`, e o banco guarda somente suas referências. A aplicação carrega os registros ao entrar. Use **Atualizar** para consultar alterações feitas em outro dispositivo. O rascunho da visita é preservado ao navegar entre telas; alterações ainda não salvas não são sincronizadas.
 
-O único serviço consultado pelo aplicativo é o [ViaCEP](https://viacep.com.br/), quando o usuário pede a busca de endereço. As fontes tipográficas são carregadas do Google Fonts; se estiverem indisponíveis, o navegador usa fontes do sistema.
+O aplicativo também consulta o [ViaCEP](https://viacep.com.br/) para preencher endereços. As fontes tipográficas são carregadas do Google Fonts; se estiverem indisponíveis, o navegador usa fontes do sistema.
 
-O módulo `src/lib/repository.mjs` concentra a leitura e a gravação para permitir a futura implementação de um repositório remoto. Login, permissões, upload remoto e políticas de acesso ainda precisam ser implementados com o provedor escolhido. Não conecte a prévia a um banco apenas alterando uma URL.
+O módulo `src/lib/repository.mjs` seleciona o repositório remoto quando as URLs públicas do Neon estão configuradas. Com `VITE_FAMAC_MODE=local`, funciona a prévia em IndexedDB (`famac-visitacao-local-v1`), independente do banco remoto. **Os dados antigos da prévia nunca são importados automaticamente.**
 
-Consulte [Próximos passos para o banco](docs/BANCO_FUTURO.md) e [Identidade visual](docs/IDENTIDADE_VISUAL.md).
+Consulte [Configuração e operação do Neon](docs/NEON.md), [Modelo do banco e próximos passos](docs/BANCO_FUTURO.md) e [Identidade visual](docs/IDENTIDADE_VISUAL.md).
 
 ## Regras dos relatórios
 
@@ -68,6 +70,8 @@ Consulte [Próximos passos para o banco](docs/BANCO_FUTURO.md) e [Identidade vis
 Repositório de destino: [RAGCode-BR/FAMAC-VISITACAO](https://github.com/RAGCode-BR/FAMAC-VISITACAO).
 
 O workflow `.github/workflows/pages.yml` instala as dependências, executa os testes, compila o sistema e publica `dist/` a cada push em `main`. No repositório, o GitHub Pages precisa estar habilitado com **Settings → Pages → Source: GitHub Actions**. A disponibilidade para repositórios privados depende do plano e das permissões da conta.
+
+As variáveis de repositório `VITE_NEON_AUTH_URL` e `VITE_FAMAC_API_URL` contêm somente URLs públicas. Credenciais do banco e do bucket não participam do build. O backend é publicado separadamente com `neon deploy`.
 
 Depois de `npm run build`, execute `npm run test:pages` para verificar o build servido na subpasta `/FAMAC-VISITACAO/`. Esse teste usa o mesmo Edge configurado para os testes de interface e confere os recursos da aplicação sem permitir que uma página de fallback esconda erros 404.
 

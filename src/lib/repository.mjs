@@ -1,4 +1,6 @@
 import { emptyData } from "./domain.mjs";
+import { cloudEnabled } from "./auth.mjs";
+import { cloudRepository } from "./cloud-repository.mjs";
 
 // Apenas o armazenamento FAMAC. Nenhuma credencial, SDK ou conexão externa.
 const DATABASE_NAME = "famac-visitacao-local-v1";
@@ -21,7 +23,7 @@ async function database() {
   });
   return connection;
 }
-export const repository = {
+const localRepository = {
   async load() {
     const db = await database();
     return new Promise((resolve, reject) => {
@@ -48,3 +50,13 @@ export const repository = {
     });
   },
 };
+export const repository = cloudEnabled
+  ? cloudRepository
+  : {
+      ...localRepository,
+      setActor() {},
+      clear() {},
+      async photoUrl(photo) {
+        return photo.url;
+      },
+    };

@@ -1,0 +1,143 @@
+.login-page {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: #f5f6fa;
+  color: #11183d;
+  font-family: "DM Sans", sans-serif;
+}
+.login-brand {
+  background: #11183d;
+  color: white;
+  padding: 60px clamp(28px, 6vw, 100px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+}
+.login-brand img {
+  width: 240px;
+  max-width: 80%;
+  height: auto;
+  margin: 0 0 48px;
+}
+.login-brand .eyebrow {
+  color: #9faed8;
+}
+.login-brand h1 {
+  color: white;
+  font-family: Manrope, sans-serif;
+  font-size: clamp(28px, 3vw, 44px);
+  line-height: 1.25;
+  max-width: 520px;
+  margin: 16px 0 20px;
+}
+.login-brand p {
+  max-width: 420px;
+  font-size: 17px;
+  line-height: 1.7;
+  color: #c4cbe1;
+}
+.login-panel {
+  padding: 48px 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 48px;
+}
+.login-card {
+  width: 100%;
+  max-width: 420px;
+}
+.login-card h2 {
+  font-size: 30px;
+  font-family: Manrope, sans-serif;
+  margin: 16px 0;
+}
+.login-card > p {
+  color: #626b82;
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0 0 32px;
+}
+.login-card form {
+  display: grid;
+  gap: 20px;
+}
+.login-card form > .button {
+  width: 100%;
+  justify-content: space-between;
+  min-height: 48px;
+  margin-top: 4px;
+}
+.login-card .login-help {
+  font-size: 14px;
+  margin-top: 24px;
+}
+.login-footer {
+  font-size: 12px;
+  color: #687187;
+  text-align: center;
+  line-height: 1.6;
+}
+.cloud-account-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cloud-account-actions .button {
+  font-size: 13px;
+  padding: 8px 12px;
+}
+.access-management {
+  margin-top: 24px;
+}
+@media (max-width: 1050px) {
+  .topbar:has(.cloud-account-actions) {
+    height: auto;
+    min-height: 82px;
+    flex-wrap: wrap;
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+  .topbar:has(.cloud-account-actions) .topbar-right {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .cloud-account-actions {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 760px) {
+  .login-page {
+    grid-template-columns: 1fr;
+  }
+  .login-brand {
+    padding: 24px 28px;
+    align-items: center;
+  }
+  .login-brand img {
+    width: 150px;
+    margin: 0;
+  }
+  .login-brand h1,
+  .login-brand p,
+  .login-brand .eyebrow {
+    display: none;
+  }
+  .login-panel {
+    padding: 32px 24px;
+    gap: 32px;
+  }
+  .login-card h2 {
+    font-size: 27px;
+  }
+  .cloud-account-actions .button {
+    font-size: 12px;
+    padding: 8px;
+  }
+  .topbar-date:has(~ .cloud-account-actions) {
+    display: none;
+  }
+}

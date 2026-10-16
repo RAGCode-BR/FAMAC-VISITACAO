@@ -32,6 +32,10 @@ jobs:
         run: npm test
       - name: Compilar aplicação
         run: npm run build
+        env:
+          VITE_FAMAC_MODE: cloud
+          VITE_NEON_AUTH_URL: ${{ vars.VITE_NEON_AUTH_URL }}
+          VITE_FAMAC_API_URL: ${{ vars.VITE_FAMAC_API_URL }}
       - name: Preparar GitHub Pages
         uses: actions/configure-pages@v5
       - name: Enviar arquivos da aplicação

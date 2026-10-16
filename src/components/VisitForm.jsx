@@ -40,6 +40,7 @@ async function preparePhoto(file) {
 export default function VisitForm({
   data,
   userId,
+  canAssign = true,
   save,
   plan,
   onSaved,
@@ -207,6 +208,7 @@ export default function VisitForm({
             />
             <Select
               label="Colaborador"
+              disabled={!canAssign}
               value={form.userId}
               onChange={(userId) => update({ userId })}
               required

@@ -16,6 +16,8 @@ import {
   visitsCsv,
 } from "../lib/domain.mjs";
 import Pagination from "./Pagination.jsx";
+import VisitPhoto from "./VisitPhoto.jsx";
+import { AccessManagement } from "./AuthGate.jsx";
 import {
   AddressFields,
   Badge,
@@ -264,10 +266,11 @@ export function VisitDetail({ visit, onClose }) {
           <h3 className="detail-heading">Fotos da obra</h3>
           <div className="detail-photos">
             {visit.photos.map((photo) => (
-              <a key={photo.id} href={photo.url} download={photo.name}>
-                <img src={photo.url} alt={`Obra: ${photo.name}`} />
-                <span>Baixar foto</span>
-              </a>
+              <VisitPhoto
+                key={photo.id}
+                photo={photo}
+                alt={`Obra: ${photo.name}`}
+              />
             ))}
           </div>
         </>
@@ -884,7 +887,7 @@ export function Works({ data, save, onVisit }) {
   );
 }
 
-function PlanForm({ data, userId, save, onClose }) {
+function PlanForm({ data, userId, save, onClose, canAssign = true }) {
   const [form, setForm] = useState({
     workId: "",
     userId,
@@ -957,6 +960,7 @@ function PlanForm({ data, userId, save, onClose }) {
           />
           <Select
             label="Colaborador"
+            disabled={!canAssign}
             value={form.userId}
             onChange={(userId) => setForm({ ...form, userId })}
           >
@@ -1060,7 +1064,7 @@ function CancelPlan({ plan, save, onClose }) {
     </Modal>
   );
 }
-export function Schedule({ data, userId, save, onVisit }) {
+export function Schedule({ data, userId, save, onVisit, canAssign = true }) {
   const [date, setDate] = useState(today());
   const [period, setPeriod] = useState("month");
   const [user, setUser] = useState("");
@@ -1227,6 +1231,7 @@ export function Schedule({ data, userId, save, onVisit }) {
         <PlanForm
           data={data}
           userId={userId}
+          canAssign={canAssign}
           save={save}
           onClose={() => setAdding(false)}
         />
@@ -1786,7 +1791,7 @@ export function Catalog({ data }) {
   );
 }
 
-export function Team({ data, userId, onUserChange }) {
+export function Team({ data, userId, onUserChange, account }) {
   return (
     <>
       <div className="directory-intro">
@@ -1819,7 +1824,11 @@ export function Team({ data, userId, onUserChange }) {
                 onClick={() => onUserChange(item.id)}
                 disabled={userId === item.id}
               >
-                {userId === item.id ? "Perfil selecionado" : "Usar na prévia"}
+                {userId === item.id
+                  ? "Perfil selecionado"
+                  : account
+                    ? "Selecionar colaborador"
+                    : "Usar na prévia"}
               </button>
             </article>
           );
@@ -1828,11 +1837,12 @@ export function Team({ data, userId, onUserChange }) {
       <div className="notice team-notice">
         <Icon name="info" />
         <p>
-          Esta é uma prévia local. A seleção de colaborador serve para revisar
-          os fluxos e atribuir registros; não é um login. As contas, senhas e
-          permissões serão configuradas com o banco definitivo.
+          {account
+            ? "Cada colaborador acessa seus próprios registros com PIN e senha. A administração pode acompanhar os resultados de toda a equipe."
+            : "Esta é uma prévia local. A seleção de colaborador serve para revisar os fluxos e atribuir registros; não é um login. As contas, senhas e permissões serão configuradas com o banco definitivo."}
         </p>
       </div>
+      {account && <AccessManagement account={account} />}
     </>
   );
 }
