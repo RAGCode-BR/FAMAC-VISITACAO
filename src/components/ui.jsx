@@ -174,6 +174,7 @@ export function ContactForm({ initial, role, data, save, onClose, onCreated }) {
       name: "",
       role: role || "contractor",
       phone: "",
+      phone2: "",
       city: "",
       company: "",
       notes: "",
@@ -251,18 +252,27 @@ export function ContactForm({ initial, role, data, save, onClose, onCreated }) {
             maxLength={25}
           />
           <Field
+            label="Segundo telefone"
+            value={form.phone2 || ""}
+            onChange={change("phone2")}
+            type="tel"
+            maxLength={25}
+          />
+        </div>
+        <div className="fields two">
+          <Field
             label="Empresa / escritório"
             value={form.company}
             onChange={change("company")}
             maxLength={180}
           />
+          <Field
+            label="Cidade"
+            value={form.city || ""}
+            onChange={change("city")}
+            maxLength={180}
+          />
         </div>
-        <Field
-          label="Cidade"
-          value={form.city || ""}
-          onChange={change("city")}
-          maxLength={180}
-        />
         <Field label="Observações">
           <textarea
             value={form.notes}

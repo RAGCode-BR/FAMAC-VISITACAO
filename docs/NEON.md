@@ -47,6 +47,8 @@ A atualização automática consulta `/state?since=<revisão>` a cada 30 segundo
 
 O importador consolida repetições das abas, usa IDs estáveis, ignora linhas não identificadas como arquitetos e separa possíveis empresas ou dados conflitantes para revisão. Não sobrescreve contatos existentes com dados divergentes. Telefones ausentes permanecem vazios. As colunas de colaborador e verificação não são importadas. A planilha e seus registros não são publicados no GitHub; a prévia local continua vazia.
 
+Unificações de nomes com dados diferentes exigem aprovação explícita em um array JSON local, passado por `--merge <arquivo-local>`. O cadastro permite `phone` e `phone2`, com links de ligação separados. Cidades distintas aprovadas são preservadas no campo Cidade, separadas por `/`. Sem aprovação, o caso continua em revisão. Os demais contatos existentes não são sobrescritos.
+
 Fotos são comprimidas no navegador e enviadas à Function autenticada. O servidor valida JPG e tamanho, gera a chave do objeto e grava no bucket privado. O histórico obtém links de leitura com validade de cinco minutos, somente após verificar a autoria. Fotos não ficam em base64 no banco e não são carregadas em cada relatório.
 
 O sistema exige conexão para entrar e salvar na versão conectada. O rascunho não é uma fila offline. Dados da prévia local continuam isolados e exigem uma importação explícita caso ela venha a ser solicitada.

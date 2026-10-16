@@ -24,8 +24,21 @@ if (
   excludeNames.some((name) => typeof name !== "string")
 )
   throw new Error("A lista de exclusões precisa conter somente nomes.");
+const mergeAt = process.argv.indexOf("--merge");
+const mergeNames =
+  mergeAt < 0
+    ? []
+    : JSON.parse(await readFile(process.argv[mergeAt + 1], "utf8"));
+if (
+  !Array.isArray(mergeNames) ||
+  mergeNames.some((name) => typeof name !== "string")
+)
+  throw new Error(
+    "A lista de unificações precisa conter somente nomes aprovados.",
+  );
 const plan = planArchitects(JSON.parse(await readFile(input, "utf8")), {
   excludeNames,
+  mergeNames,
 });
 await mkdir("test-results", { recursive: true });
 await writeFile(

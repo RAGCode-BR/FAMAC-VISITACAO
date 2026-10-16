@@ -17,6 +17,7 @@ import {
 } from "../lib/domain.mjs";
 import Pagination from "./Pagination.jsx";
 import VisitPhoto from "./VisitPhoto.jsx";
+import { contactPhones } from "../lib/contacts.mjs";
 import { AccessManagement } from "./AuthGate.jsx";
 import {
   AddressFields,
@@ -530,15 +531,16 @@ export function Contacts({ data, save, onDetail }) {
                   </Badge>
                   {item.company && <p>{item.company}</p>}
                   {item.city && <p>{item.city}</p>}
-                  {item.phone && (
+                  {contactPhones(item).map((phone) => (
                     <a
+                      key={phone}
                       className="contact-phone"
-                      href={`tel:${item.phone.replace(/\D/g, "")}`}
+                      href={`tel:${phone.replace(/\D/g, "")}`}
                     >
                       <Icon name="phone" size={15} />
-                      {item.phone}
+                      {phone}
                     </a>
-                  )}
+                  ))}
                   <div className="card-bottom">
                     <span>{visits.length} visitas vinculadas</span>
                     {visits.length > 0 && (

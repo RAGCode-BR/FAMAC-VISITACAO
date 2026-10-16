@@ -47,3 +47,34 @@ test("nomes com dados conflitantes ficam em revisão; telefone ausente não é i
   assert.equal(conflict.excluded.length, 2);
   assert.equal(planArchitects([row]).contacts[0].phone, "");
 });
+
+test("unificação aprovada preserva dois telefones e ambas as cidades em um cadastro", () => {
+  const row = {
+    name: "Arquiteta Exemplo",
+    profession: "ARQUITETA",
+    phone: "(66) 99999-0000",
+    city: "Cidade A",
+  };
+  const rows = [
+    row,
+    { ...row, phone: "66 99999-0000" },
+    { ...row, phone: "(66) 98888-0000", city: "Cidade B" },
+  ];
+  const plan = planArchitects(rows, { mergeNames: [row.name] });
+  assert.equal(plan.contacts.length, 1);
+  assert.equal(plan.excluded.length, 0);
+  assert.equal(plan.contacts[0].phone, row.phone);
+  assert.equal(plan.contacts[0].phone2, "(66) 98888-0000");
+  assert.equal(plan.contacts[0].city, "Cidade A / Cidade B");
+  assert.equal(
+    planArchitects([...rows].reverse(), { mergeNames: [row.name] }).contacts[0]
+      .id,
+    plan.contacts[0].id,
+  );
+  const thirdPhone = { ...row, phone: "(66) 97777-0000" };
+  assert.equal(
+    planArchitects([...rows, thirdPhone], { mergeNames: [row.name] }).contacts
+      .length,
+    0,
+  );
+});

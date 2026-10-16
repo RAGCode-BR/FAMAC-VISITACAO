@@ -17,7 +17,10 @@ const phoneKey = (value) => String(value || "").replace(/\D/g, "");
 export const architectKey = (contact) =>
   [
     normalizeContact(contact.name),
-    phoneKey(contact.phone),
+    [phoneKey(contact.phone), phoneKey(contact.phone2)]
+      .filter(Boolean)
+      .sort()
+      .join(","),
     normalizeContact(cityName(contact.city)),
   ].join("|");
 function stableId(key) {
@@ -26,8 +29,12 @@ function stableId(key) {
     .digest("hex");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
-export function planArchitects(rows, { excludeNames = [] } = {}) {
+export function planArchitects(
+  rows,
+  { excludeNames = [], mergeNames = [] } = {},
+) {
   const companyNames = new Set(excludeNames.map(normalizeContact));
+  const approvedMerges = new Set(mergeNames.map(normalizeContact));
   const groups = new Map();
   const excluded = [];
   const seen = new Set();
@@ -67,7 +74,11 @@ export function planArchitects(rows, { excludeNames = [] } = {}) {
     const cities = new Set(
       group.map((r) => normalizeContact(r.city)).filter(Boolean),
     );
-    if (phones.size > 1 || cities.size > 1) {
+    if (
+      phones.size > 2 ||
+      ((phones.size > 1 || cities.size > 1) &&
+        !approvedMerges.has(normalizeContact(group[0].name)))
+    ) {
       excluded.push(
         ...group.map((row) => ({
           ...row,
@@ -81,10 +92,23 @@ export function planArchitects(rows, { excludeNames = [] } = {}) {
       name: clean(group[0].name),
       role: "architect",
       phone: clean(group.find((r) => phoneKey(r.phone))?.phone),
-      city: clean(group.find((r) => r.city)?.city),
+      city: [
+        ...new Map(
+          group
+            .filter((r) => r.city)
+            .map((r) => [normalizeContact(r.city), clean(r.city)]),
+        ).values(),
+      ]
+        .sort((a, b) => a.localeCompare(b, "pt-BR"))
+        .join(" / "),
       company: "",
       notes: "",
     };
+    const secondPhone = [...phones][1];
+    if (secondPhone)
+      contact.phone2 = clean(
+        group.find((r) => phoneKey(r.phone) === secondPhone).phone,
+      );
     contact.id = stableId(architectKey(contact));
     contacts.push(contact);
     duplicates += group.length - 1;

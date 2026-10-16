@@ -136,6 +136,17 @@ try {
       })
       .click();
     const modal = page.getByRole("dialog");
+    if (role === "Arquiteto") {
+      await modal
+        .getByLabel("Telefone", { exact: true })
+        .fill("(11) 99999-0000");
+      await modal
+        .getByLabel("Segundo telefone", { exact: true })
+        .fill("(11) 98888-0000");
+      await modal
+        .getByLabel("Cidade", { exact: true })
+        .fill("Cidade A / Cidade B");
+    }
     await modal
       .getByRole("button", { name: "Salvar contato", exact: true })
       .click();
@@ -270,6 +281,37 @@ try {
 
   await page.reload();
   await page.locator(".visit-form").waitFor();
+  await navigate("Contatos");
+  const architectCard = page
+    .locator(".contact-card")
+    .filter({
+      has: page.getByRole("heading", { name: "Arquiteta teste", exact: true }),
+    });
+  assert.equal(
+    await architectCard.locator('a[href="tel:11999990000"]').count(),
+    1,
+  );
+  assert.equal(
+    await architectCard.locator('a[href="tel:11988880000"]').count(),
+    1,
+  );
+  await architectCard
+    .getByRole("button", { name: "Editar Arquiteta teste", exact: true })
+    .click();
+  assert.equal(
+    await page
+      .getByRole("dialog")
+      .getByLabel("Segundo telefone", { exact: true })
+      .inputValue(),
+    "(11) 98888-0000",
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Cancelar", exact: true })
+    .click();
+  console.log(
+    "PASS: contato com dois telefones, links individuais e segundo número preservado ao recarregar e editar",
+  );
   await navigate("Obras");
   assert.equal(await page.locator(".work-card").count(), 1);
   await navigate("Programação");
@@ -336,7 +378,9 @@ try {
     .getByRole("dialog")
     .getByRole("button", { name: "Fechar detalhes" })
     .click();
-  console.log("PASS: relacionamento sem produtos salvo e exibido nos relatórios");
+  console.log(
+    "PASS: relacionamento sem produtos salvo e exibido nos relatórios",
+  );
 
   // Todas as telas em celular pequeno e navegação por teclado.
   await page.setViewportSize({ width: 360, height: 800 });
