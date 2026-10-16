@@ -6,7 +6,7 @@ Projeto FAMAC `morning-river-28975560`, organização `org-fancy-queen-60178958`
 
 O usuário informa **PIN de um número e senha**, sem caixa de e-mail: 0 para o administrador, 1 para Claudionor, 2 para Charles e 3 para Celso. O PIN é convertido em um identificador técnico reservado pelo `src/lib/identity.mjs` para usar o Neon Auth gerenciado. Esse identificador permanece estável para preservar as contas e senhas existentes; não envia mensagens nem aparece no formulário. Não há cadastro público; os usuários são criados pela administração. O PIN não substitui a senha. O formato de um dígito comporta no máximo dez identificadores distintos.
 
-- Colaborador: somente obras, visitas, programação, fotos e contatos de responsáveis com sua autoria. Arquitetos e empreiteiros são compartilhados, disponíveis para consulta, seleção e edição por toda a equipe. A autoria original é preservada; contatos importados sem colaborador atribuído usam `owner_id='shared'`.
+- Colaborador: somente obras, visitas, programação, fotos e contatos de responsáveis com sua autoria. Arquitetos e empreiteiros são compartilhados, disponíveis para consulta, seleção, edição e exclusão por toda a equipe. A autoria original é preservada; contatos importados sem colaborador atribuído usam `owner_id='shared'`.
 - Administrador: consulta toda a equipe. O seletor no topo define o colaborador para novos cadastros; os relatórios continuam consolidando todos os registros autorizados.
 - **Alterar senha**: disponível ao usuário autenticado.
 - **Colaboradores → Acessos ao sistema**: administração pode redefinir senhas. Recuperação não depende de e-mail.
@@ -37,7 +37,9 @@ O comando inicial `neon init --agent codex` instala o plugin Neon com a configur
 
 O schema `famac` contém membros, obras, contatos, visitas, programação, referências de fotos, revisão e operações. Dados são salvos por registro, com autoria no servidor. A API verifica JWT do Neon Auth e o vínculo fixo da conta antes de consultar ou alterar dados. A interface não acessa Postgres nem S3 com credenciais próprias.
 
-`famac.products` armazena produtos adicionais do catálogo. Os 14 produtos iniciais continuam definidos no domínio. A criação exige administrador no servidor; produtos adicionais são compartilhados, têm nomes únicos normalizados e podem ser oferecidos/vendidos nas visitas e usados nos relatórios. O histórico preserva os nomes dos produtos; não há exclusão ou renomeação. Clientes antigos que omitam a coleção `products` em um salvamento preservam o catálogo remoto.
+`famac.products` armazena produtos adicionais e alterações dos 14 produtos iniciais, que possuem IDs estáveis no domínio. Criar, editar e excluir produtos exige administrador no servidor. Os produtos ativos são compartilhados, têm nomes únicos normalizados e podem ser oferecidos/vendidos nas visitas e usados nos relatórios. Renomeações afetam usos futuros; visitas e relatórios preservam os nomes registrados na época. Clientes antigos que omitam a coleção `products` em um salvamento preservam o catálogo remoto.
+
+Contatos e produtos usam exclusão lógica (`deleted: true`), com confirmação na interface. Saem das listas de cadastro e das opções para novos vínculos, mas permanecem nos vínculos existentes e filtros históricos. Um contato excluído que já pertence a uma obra pode continuar no registro de novas visitas dessa obra; não pode ser vinculado a outra obra. Cadastros excluídos não podem ser alterados ou reativados por um formulário antigo. Remoções físicas e alterações de visitas continuam bloqueadas pela API. A exclusão de contatos segue as mesmas permissões da edição.
 
 O salvamento de obra, visita e retorno é transacional. Uma revisão evita sobrescrever alterações de outro dispositivo; em conflito, o app atualiza a base, preserva os campos em preenchimento e pede uma nova tentativa. Operações têm identificação para confirmar commits cuja resposta se perdeu.
 

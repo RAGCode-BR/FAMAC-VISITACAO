@@ -33,8 +33,8 @@ O build está em `dist/`; a prévia do build usa **http://127.0.0.1:4174/**. Cad
 - Fotos por câmera/galeria, com até 6 imagens, limitadas a 12 MB por arquivo antes da otimização local.
 - Histórico de visitas e detalhes com fotos, observações e próxima ação.
 - Programação por dia/semana/mês, retorno opcional ao registrar visita, conclusão e motivo de não realização.
-- Cadastro e edição de obras e contatos, com paginação de 12 registros e filtros sobre a lista completa.
-- Catálogo com 14 produtos iniciais e novos produtos cadastrados pela administração, disponíveis para toda a equipe.
+- Cadastro e edição de obras e contatos, com paginação de 12 registros e filtros sobre a lista completa. Contatos podem ser excluídos com confirmação, preservando vínculos e histórico.
+- Catálogo com 14 produtos iniciais e novos produtos, disponíveis para toda a equipe. A administração pode cadastrar, editar e excluir qualquer produto; alterações de nome valem para as próximas visitas e o histórico mantém o nome original.
 - Visão geral, equipe e relatórios com filtros combinados, rankings, exportação CSV e impressão/PDF.
 - Login com PIN e senha, alteração de senha e redefinição pela administração, sem e-mail de acesso.
 - Integração com Postgres, Auth, Functions e Object Storage do Neon. Arquitetos e empreiteiros são compartilhados; obras, visitas, programação e fotos ficam restritos ao colaborador. A administração consulta a equipe.

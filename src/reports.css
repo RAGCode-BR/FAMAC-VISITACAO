@@ -568,3 +568,25 @@
     font-size: 20px;
   }
 }
+.record-actions,
+.product-record-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.product-record-actions {
+  border-top: 1px solid var(--border, #e4e8f0);
+  margin-top: 18px;
+  padding-top: 14px;
+  flex-wrap: wrap;
+}
+.delete-action {
+  color: #b71932;
+}
+.delete-action:hover {
+  background: #fff0f2;
+}
+.delete-record-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}

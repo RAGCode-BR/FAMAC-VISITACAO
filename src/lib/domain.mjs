@@ -59,13 +59,52 @@ export const productName = (name) =>
     .trim()
     .replace(/\s+/g, " ")
     .toLocaleUpperCase("pt-BR");
-export const productNames = (data) => [
-  ...new Map(
-    [...PRODUCTS, ...(data.products || []).map((item) => item.name)]
-      .filter((name) => typeof name === "string" && name.trim())
-      .map((name) => [productKey(name), name]),
-  ).values(),
-];
+// IDs estáveis permitem editar e excluir também os produtos do catálogo inicial.
+export const DEFAULT_PRODUCTS = PRODUCTS.map((name, index) => ({
+  id: `fa0ac000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+  name,
+}));
+export const catalogProducts = (data, includeDeleted = false) => {
+  const rows = new Map(DEFAULT_PRODUCTS.map((item) => [item.id, item]));
+  for (const item of data.products || []) rows.set(item.id, item);
+  return [...rows.values()].filter((item) => includeDeleted || !item.deleted);
+};
+export const productNames = (data) =>
+  catalogProducts(data).map((item) => item.name);
+export function saveProduct(data, product) {
+  const current = catalogProducts(data, true).find(
+    (item) => item.id === product.id,
+  );
+  if (current?.deleted) throw new Error("Este produto já foi excluído.");
+  const name = productName(product.name);
+  if (!name || name.length > 80)
+    throw new Error("Informe um nome de até 80 caracteres.");
+  if (
+    catalogProducts(data).some(
+      (item) =>
+        item.id !== product.id && productKey(item.name) === productKey(name),
+    )
+  )
+    throw new Error("Já existe um produto com esse nome.");
+  const record = { ...current, ...product, name };
+  return {
+    ...data,
+    products: [
+      ...(data.products || []).filter((item) => item.id !== record.id),
+      record,
+    ],
+  };
+}
+export function deleteContact(data, id) {
+  const contact = data.contacts.find((item) => item.id === id && !item.deleted);
+  if (!contact) throw new Error("Este contato já foi excluído.");
+  return {
+    ...data,
+    contacts: data.contacts.map((item) =>
+      item.id === id ? { ...item, deleted: true } : item,
+    ),
+  };
+}
 export const uid = () => crypto.randomUUID();
 export const person = (id) =>
   TEAM.find((item) => item.id === id)?.name || "Não informado";
@@ -167,6 +206,14 @@ export function recordVisit(
   const existing = data.works.find((item) => item.id === draft.workId);
   if (draft.workId && !existing)
     throw new Error("A obra selecionada não está mais disponível.");
+  for (const key of ["architectId", "contractorId"]) {
+    if (
+      draft[key] &&
+      data.contacts.find((item) => item.id === draft[key])?.deleted &&
+      existing?.[key] !== draft[key]
+    )
+      throw new Error("Este contato foi excluído. Selecione outro contato.");
+  }
   const work = {
     ...(existing || {}),
     id: existing?.id || workId,

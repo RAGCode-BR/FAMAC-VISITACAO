@@ -3,6 +3,9 @@ import {
   productNames,
   productName,
   productKey,
+  catalogProducts,
+  saveProduct,
+  deleteContact,
   TEAM,
   STAGES,
   addressLabel,
@@ -458,9 +461,11 @@ export function Contacts({ data, save, onDetail }) {
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("");
   const [editing, setEditing] = useState(null);
+  const [deleting, setDeleting] = useState(null);
   const contacts = data.contacts
     .filter(
       (item) =>
+        !item.deleted &&
         (!role || item.role === role) &&
         normalize(
           `${item.name} ${item.company || ""} ${item.city || ""}`,
@@ -536,13 +541,22 @@ export function Contacts({ data, save, onDetail }) {
                       <span className="contact-avatar">
                         {item.name.slice(0, 2).toUpperCase()}
                       </span>
-                      <button
-                        className="icon-button"
-                        aria-label={`Editar ${item.name}`}
-                        onClick={() => setEditing(item)}
-                      >
-                        <Icon name="edit" size={17} />
-                      </button>
+                      <div className="record-actions">
+                        <button
+                          className="icon-button"
+                          aria-label={`Editar ${item.name}`}
+                          onClick={() => setEditing(item)}
+                        >
+                          <Icon name="edit" size={17} />
+                        </button>
+                        <button
+                          className="icon-button delete-action"
+                          aria-label={`Excluir ${item.name}`}
+                          onClick={() => setDeleting(item)}
+                        >
+                          <Icon name="trash" size={17} />
+                        </button>
+                      </div>
                     </div>
                     <h3>{item.name}</h3>
                     <Badge tone={item.role === "architect" ? "blue" : ""}>
@@ -610,6 +624,17 @@ export function Contacts({ data, save, onDetail }) {
           data={data}
           save={save}
           onClose={() => setEditing(null)}
+        />
+      )}
+      {deleting && (
+        <DeleteRecord
+          title="Excluir contato?"
+          name={deleting.name}
+          description="O contato sairá da lista compartilhada e das opções para novos vínculos. Obras, visitas e relatórios anteriores serão preservados."
+          save={save}
+          update={(current) => deleteContact(current, deleting.id)}
+          message="Contato excluído."
+          onClose={() => setDeleting(null)}
         />
       )}
     </>
@@ -1514,9 +1539,11 @@ export function Reports({ data, onDetail, team = TEAM }) {
             onChange={set("product")}
           >
             <option value="">Todos os produtos</option>
-            {productNames(data).map((name) => (
-              <option key={name}>{name}</option>
-            ))}
+            {summarize(data.visits, productNames(data)).products.map(
+              ({ name }) => (
+                <option key={name}>{name}</option>
+              ),
+            )}
           </Select>
           <Select
             label="Resultado do produto"
@@ -1817,49 +1844,99 @@ export function Reports({ data, onDetail, team = TEAM }) {
 
 export function Catalog({ data, save, canManage = false }) {
   const stats = summarize(data.visits, productNames(data));
-  const [adding, setAdding] = useState(false);
+  const items = catalogProducts(data);
+  const [editing, setEditing] = useState(null);
+  const [deleting, setDeleting] = useState(null);
   return (
     <>
       <div className="catalog-banner">
         <span className="eyebrow">O ACABAMENTO FAZ A DIFERENÇA</span>
         <h2>Possibilidades para cada ambiente.</h2>
         <p>
-          {stats.products.length} produtos da FAMAC, prontos para fazer parte da
-          próxima visita.
+          {items.length} produtos da FAMAC, prontos para fazer parte da próxima
+          visita.
         </p>
       </div>
       {canManage && (
         <div className="catalog-actions">
-          <button className="button primary" onClick={() => setAdding(true)}>
+          <button className="button primary" onClick={() => setEditing({})}>
             <Icon name="plus" size={18} />
             Novo produto
           </button>
         </div>
       )}
       <div className="catalog-grid">
-        {stats.products.map((item, index) => (
-          <article className="catalog-card" key={item.name}>
-            <div>
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              <Icon name="box" size={24} />
-            </div>
-            <h3>{item.name}</h3>
-            <p>
-              <strong>{item.offered}</strong> visitas com oferta <span>·</span>{" "}
-              <strong>{item.sold}</strong> com venda
-            </p>
-          </article>
-        ))}
+        {items.map((item, index) => {
+          const count = stats.products.find((row) => row.name === item.name);
+          return (
+            <article className="catalog-card" key={item.id}>
+              <div>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <Icon name="box" size={24} />
+              </div>
+              <h3>{item.name}</h3>
+              <p>
+                <strong>{count.offered}</strong> visitas com oferta{" "}
+                <span>·</span> <strong>{count.sold}</strong> com venda
+              </p>
+              {canManage && (
+                <footer className="product-record-actions">
+                  <button
+                    className="button secondary"
+                    aria-label={`Editar ${item.name}`}
+                    onClick={() => setEditing(item)}
+                  >
+                    <Icon name="edit" size={16} />
+                    Editar
+                  </button>
+                  <button
+                    className="button secondary delete-action"
+                    aria-label={`Excluir ${item.name}`}
+                    onClick={() => setDeleting(item)}
+                  >
+                    <Icon name="trash" size={16} />
+                    Excluir
+                  </button>
+                </footer>
+              )}
+            </article>
+          );
+        })}
       </div>
-      {adding && (
-        <ProductForm data={data} save={save} onClose={() => setAdding(false)} />
+      {!items.length && (
+        <Empty
+          title="Nenhum produto no catálogo"
+          description="Cadastre um produto para disponibilizá-lo nas próximas visitas."
+          icon="box"
+        />
+      )}
+      {editing && (
+        <ProductForm
+          initial={editing.id ? editing : undefined}
+          data={data}
+          save={save}
+          onClose={() => setEditing(null)}
+        />
+      )}
+      {deleting && (
+        <DeleteRecord
+          title="Excluir produto?"
+          name={deleting.name}
+          description="O produto deixará de aparecer nas próximas visitas. Ofertas, vendas e relatórios já registrados continuarão com o nome original."
+          save={save}
+          update={(current) =>
+            saveProduct(current, { ...deleting, deleted: true })
+          }
+          message="Produto excluído do catálogo."
+          onClose={() => setDeleting(null)}
+        />
       )}
     </>
   );
 }
 
-function ProductForm({ data, save, onClose }) {
-  const [name, setName] = useState("");
+function ProductForm({ initial, data, save, onClose }) {
+  const [name, setName] = useState(initial?.name || "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async (event) => {
@@ -1868,18 +1945,22 @@ function ProductForm({ data, save, onClose }) {
     if (!clean || clean.length > 80)
       return setError("Informe um nome de até 80 caracteres.");
     if (
-      productNames(data).some((item) => productKey(item) === productKey(clean))
+      catalogProducts(data).some(
+        (item) =>
+          item.id !== initial?.id &&
+          productKey(item.name) === productKey(clean),
+      )
     )
       return setError("Já existe um produto com esse nome.");
     setBusy(true);
     setError("");
     try {
       await save(
-        (current) => ({
-          ...current,
-          products: [...(current.products || []), { id: uid(), name: clean }],
-        }),
-        "Produto cadastrado e disponível nas visitas.",
+        (current) =>
+          saveProduct(current, { id: initial?.id || uid(), name: clean }),
+        initial
+          ? "Produto atualizado."
+          : "Produto cadastrado e disponível nas visitas.",
       );
       onClose();
     } catch (cause) {
@@ -1889,7 +1970,10 @@ function ProductForm({ data, save, onClose }) {
     }
   };
   return (
-    <Modal title="Novo produto" onClose={onClose}>
+    <Modal
+      title={initial ? "Editar produto" : "Novo produto"}
+      onClose={onClose}
+    >
       <form onSubmit={submit}>
         <Field
           label="Nome do produto"
@@ -1898,7 +1982,11 @@ function ProductForm({ data, save, onClose }) {
           required
           maxLength={80}
           autoFocus
-          hint="Disponível para toda a equipe nas próximas visitas."
+          hint={
+            initial
+              ? "O novo nome será usado nas próximas visitas. O histórico manterá o nome registrado na época."
+              : "Disponível para toda a equipe nas próximas visitas."
+          }
         />
         {error && (
           <p className="error" role="alert">
@@ -1910,7 +1998,63 @@ function ProductForm({ data, save, onClose }) {
             Cancelar
           </button>
           <button className="button primary" disabled={busy}>
-            {busy ? "Salvando…" : "Cadastrar produto"}
+            {busy
+              ? "Salvando…"
+              : initial
+                ? "Salvar produto"
+                : "Cadastrar produto"}
+          </button>
+        </footer>
+      </form>
+    </Modal>
+  );
+}
+
+function DeleteRecord({
+  title,
+  name,
+  description,
+  save,
+  update,
+  message,
+  onClose,
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const submit = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await save(update, message);
+      onClose();
+    } catch (cause) {
+      setError(cause.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title={title} onClose={busy ? () => {} : onClose}>
+      <form onSubmit={submit}>
+        <p className="delete-record-name">{name}</p>
+        <p>{description}</p>
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        <footer className="modal-actions">
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Cancelar
+          </button>
+          <button className="button primary" disabled={busy}>
+            {busy ? "Excluindo…" : "Confirmar exclusão"}
           </button>
         </footer>
       </form>

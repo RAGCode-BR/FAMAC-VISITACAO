@@ -6,8 +6,10 @@ import {
   validateState,
   validateRecord,
   requireCatalogAdmin,
+  requireCatalogChange,
 } from "../server/policy.mjs";
 import { pinIdentity } from "../src/lib/identity.mjs";
+import { DEFAULT_PRODUCTS, emptyData } from "../src/lib/domain.mjs";
 
 test("PIN de um dígito preserva as contas existentes e aceita o zero", () => {
   assert.equal(pinIdentity("0"), "pin-900001@login.famac.invalid");
@@ -52,8 +54,12 @@ test("produtos exigem administração e nomes únicos inclusive acentos e espaç
   });
   assert.doesNotThrow(() => requireCatalogAdmin({ role: "admin" }));
   assert.throws(
-    () => validateRecord("products", { name: "DIVISORIAS" }),
-    /Já existe/,
+    () =>
+      validateState({
+        ...emptyData(),
+        products: [{ id: crypto.randomUUID(), name: "DIVISORIAS" }],
+      }),
+    /repetidos/,
   );
   assert.throws(() => validateRecord("products", { name: "" }));
   const state = {
@@ -68,6 +74,47 @@ test("produtos exigem administração e nomes únicos inclusive acentos e espaç
     ],
   };
   assert.throws(() => validateState(state), /repetidos/);
+});
+
+test("edição de produto inicial respeita unicidade e exclusão preserva o cadastro", () => {
+  const original = DEFAULT_PRODUCTS.find((item) => item.name === "FORRO");
+  assert.doesNotThrow(() =>
+    validateState({
+      ...emptyData(),
+      products: [{ ...original, name: "FORRO NOVO" }],
+    }),
+  );
+  assert.throws(
+    () =>
+      validateState({
+        ...emptyData(),
+        products: [{ ...original, name: "GESSO" }],
+      }),
+    /repetidos/,
+  );
+  assert.doesNotThrow(() =>
+    requireCatalogChange(original, { ...original, deleted: true }),
+  );
+  assert.throws(() =>
+    requireCatalogChange(original, {
+      ...original,
+      name: "OUTRO",
+      deleted: true,
+    }),
+  );
+  assert.throws(
+    () => requireCatalogChange({ ...original, deleted: true }, original),
+    { status: 409 },
+  );
+  assert.throws(() =>
+    validateRecord("contacts", {
+      id: crypto.randomUUID(),
+      name: "Contato",
+      role: "architect",
+      deleted: "true",
+    }),
+  );
+  assert.throws(() => validateRecord("works", { deleted: true }));
 });
 
 test("arquitetos e empreiteiros compartilhados não liberam contatos privados nem transferência de cargo", () => {

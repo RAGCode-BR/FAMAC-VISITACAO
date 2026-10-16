@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { chromium } from "playwright";
-import { today } from "../src/lib/domain.mjs";
+import {
+  today,
+  catalogProducts,
+  saveProduct,
+  deleteContact,
+} from "../src/lib/domain.mjs";
 import pg from "pg";
 import { connectionString } from "../server/connection.mjs";
 
@@ -578,6 +583,137 @@ try {
   );
   console.log(
     "PASS: salvamento idempotente e proteção contra sobrescrita de dados desatualizados",
+  );
+  // Somente a branch descartável recebe alterações e exclusões de teste.
+  const commitState = async (page, transform, actorTeamId = "celso") => {
+    const response = await call(page, "/state");
+    assert.equal(response.status, 200, "Sessão do teste deve continuar válida");
+    const state = response.data;
+    return call(page, "/state", {
+      method: "PUT",
+      body: JSON.stringify({
+        state: transform(state),
+        revision: state.revision,
+        operationId: crypto.randomUUID(),
+        actorTeamId,
+      }),
+    });
+  };
+  for (const name of ["FORRO", customProduct]) {
+    const getItem = (state) =>
+      catalogProducts(state).find((item) => item.name === name);
+    assert.equal(
+      (
+        await commitState(celso.page, (state) =>
+          saveProduct(state, { ...getItem(state), name: `${name} NOVO` }),
+        )
+      ).status,
+      403,
+    );
+    assert.equal(
+      (
+        await commitState(management.page, (state) =>
+          saveProduct(state, { ...getItem(state), name: `${name} NOVO` }),
+        )
+      ).status,
+      200,
+    );
+    const renamed = (await call(management.page, "/state")).data;
+    assert.ok(
+      renamed.visits.some((item) => item.offered.includes(name)),
+      "nome original permanece no histórico",
+    );
+    assert.equal(
+      (
+        await commitState(management.page, (state) =>
+          saveProduct(state, {
+            ...catalogProducts(state).find(
+              (item) => item.name === `${name} NOVO`,
+            ),
+            deleted: true,
+          }),
+        )
+      ).status,
+      200,
+    );
+    assert.ok(
+      !catalogProducts((await call(celso.page, "/state")).data).some(
+        (item) => item.name === `${name} NOVO`,
+      ),
+    );
+  }
+  const sharedBefore = (await call(recovered.page, "/state")).data;
+  const linkedArchitect = sharedBefore.visits.find(
+    (item) => item.architectId,
+  )?.architectId;
+  assert.ok(linkedArchitect);
+  assert.equal(
+    (
+      await commitState(
+        recovered.page,
+        (state) => deleteContact(state, linkedArchitect),
+        "charles",
+      )
+    ).status,
+    200,
+  );
+  const preserved = (await call(first.page, "/state")).data;
+  assert.ok(
+    preserved.contacts.find((item) => item.id === linkedArchitect)?.deleted,
+  );
+  assert.ok(
+    preserved.visits.some(
+      (item) => item.architectId === linkedArchitect && item.architectName,
+    ),
+  );
+  const restoreAttempt = await commitState(
+    recovered.page,
+    (state) => ({
+      ...state,
+      contacts: state.contacts.map((item) =>
+        item.id === linkedArchitect ? { ...item, deleted: false } : item,
+      ),
+    }),
+    "charles",
+  );
+  assert.equal(restoreAttempt.status, 409);
+  assert.equal(
+    (
+      await commitState(
+        first.page,
+        (state) => ({
+          ...state,
+          works: [
+            ...state.works,
+            { ...state.works[0], id: crypto.randomUUID() },
+          ],
+        }),
+        "claudionor",
+      )
+    ).status,
+    400,
+    "Contato excluído não pode ser vinculado a outra obra",
+  );
+  const ownedContact = preserved.contacts.find(
+    (item) => item.role === "responsible",
+  );
+  assert.ok(ownedContact);
+  assert.equal(
+    (
+      await commitState(
+        recovered.page,
+        (state) => ({
+          ...state,
+          contacts: [...state.contacts, { ...ownedContact, deleted: true }],
+        }),
+        "charles",
+      )
+    ).status,
+    403,
+    "Contato privado de outro colaborador não pode ser excluído",
+  );
+  console.log(
+    "PASS: API permite edição/exclusão de produtos iniciais e novos apenas por admin; exclusão de contato compartilhado preserva visitas dos dois colaboradores e bloqueia reativação",
   );
   const anotherDevice = await login(claudi);
   assert.equal(

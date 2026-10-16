@@ -68,7 +68,7 @@ try {
     responsible: "Responsável teste",
     phone: "",
     contractorId: "",
-    architectId: "",
+    architectId: index === 0 ? data.contacts[1].id : "",
     cep: "",
     complement: "",
   }));
@@ -259,12 +259,118 @@ try {
   // O limite permitido no cadastro também precisa caber na tela do celular.
   await navigate("Produtos");
   await page.getByRole("button", { name: "Novo produto", exact: true }).click();
-  await page.getByRole("dialog").getByLabel("Nome do produto", { exact: false }).fill("A".repeat(80));
-  await page.getByRole("dialog").getByRole("button", { name: "Cadastrar produto", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByLabel("Nome do produto", { exact: false })
+    .fill("A".repeat(80));
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Cadastrar produto", exact: true })
+    .click();
   await page.getByRole("dialog").waitFor({ state: "hidden" });
   await fits();
   await navigate("Nova visita");
   await fits();
+  await navigate("Contatos");
+  await page.getByLabel("Buscar contatos").fill("Contato de teste 02");
+  await page
+    .getByRole("button", { name: "Excluir Contato de teste 02", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Cancelar", exact: true })
+    .click();
+  assert.equal(await page.locator(".contact-card").count(), 1);
+  await page
+    .getByRole("button", { name: "Excluir Contato de teste 02", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Confirmar exclusão", exact: true })
+    .click();
+  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  assert.equal(await page.locator(".contact-card").count(), 0);
+  await navigate("Produtos");
+  for (const name of ["FORRO", "REVESTIMENTO TESTE"]) {
+    await page
+      .getByRole("button", { name: `Editar ${name}`, exact: true })
+      .click();
+    await page.getByRole("dialog").getByLabel("Nome do produto").fill("GESSO");
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Salvar produto", exact: true })
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByText("Já existe um produto com esse nome.")
+      .waitFor();
+    await page
+      .getByRole("dialog")
+      .getByLabel("Nome do produto")
+      .fill(`${name} NOVO`);
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Salvar produto", exact: true })
+      .click();
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    await page
+      .getByRole("button", { name: `Excluir ${name} NOVO`, exact: true })
+      .click();
+    await fits();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Confirmar exclusão", exact: true })
+      .click();
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    assert.equal(
+      await page
+        .getByRole("heading", { name: `${name} NOVO`, exact: true })
+        .count(),
+      0,
+    );
+  }
+  await page.reload();
+  await page.locator(".visit-form").waitFor();
+  assert.equal(
+    await page.getByLabel("Oferecer FORRO", { exact: true }).count(),
+    0,
+  );
+  assert.equal(
+    await page
+      .getByLabel("Oferecer REVESTIMENTO TESTE", { exact: true })
+      .count(),
+    0,
+  );
+  await page
+    .getByRole("combobox", { name: "Arquiteto", exact: true })
+    .fill("Contato de teste 02");
+  assert.equal(
+    await page.getByRole("option", { name: /Contato de teste 02/ }).count(),
+    0,
+  );
+  await navigate("Relatórios");
+  await page
+    .locator(".reports-page")
+    .getByLabel("Produto", { exact: true })
+    .selectOption("REVESTIMENTO TESTE");
+  assert.equal(
+    await page.locator(".metric").first().locator("strong").textContent(),
+    "1",
+  );
+  await page
+    .getByRole("button", { name: "Limpar filtros", exact: true })
+    .click();
+  await page
+    .locator(".reports-page")
+    .getByLabel("Arquiteto", { exact: true })
+    .selectOption(data.contacts[1].id);
+  assert.equal(
+    await page.locator(".metric").first().locator("strong").textContent(),
+    "2",
+  );
+  console.log(
+    "PASS: exclusão de contato com cancelamento, edição/exclusão de produto inicial e adicional, persistência, seleções e filtros históricos preservados",
+  );
   assert.deepEqual(errors, []);
   console.log(
     "PASS: gráficos/KPI respeitam filtros, computador/tablet/celular sem transbordamento e PDF gerado",

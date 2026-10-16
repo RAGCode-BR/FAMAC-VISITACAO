@@ -12,6 +12,9 @@ import {
   today,
   validateVisit,
   productNames,
+  catalogProducts,
+  saveProduct,
+  deleteContact,
   visitsCsv,
 } from "../src/lib/domain.mjs";
 
@@ -28,6 +31,74 @@ const draft = (extra) => ({
   ...extra,
 });
 const ids = { workId: "work-1", visitId: "visit-1", planId: "plan-1" };
+
+test("editar/excluir produtos iniciais ou adicionais não muda vendas históricas", () => {
+  let data = recordVisit(
+    emptyData(),
+    draft({ sold: ["FORRO"], saleValue: 100 }),
+    ids,
+  );
+  const original = catalogProducts(data).find((item) => item.name === "FORRO");
+  data = saveProduct(data, { ...original, name: "FORRO NOVO" });
+  assert.ok(!productNames(data).includes("FORRO"));
+  assert.ok(productNames(data).includes("FORRO NOVO"));
+  assert.deepEqual(data.visits[0].sold, ["FORRO"]);
+  assert.throws(
+    () => saveProduct(data, { ...original, name: " gesso " }),
+    /Já existe/,
+  );
+  data = saveProduct(data, {
+    ...catalogProducts(data).find((item) => item.id === original.id),
+    deleted: true,
+  });
+  assert.equal(productNames(data).length, 13);
+  assert.equal(
+    summarize(data.visits, productNames(data)).products.find(
+      (item) => item.name === "FORRO",
+    ).sold,
+    1,
+  );
+  assert.throws(
+    () => recordVisit(data, draft(), { ...ids, visitId: "new" }),
+    /Produto inválido/,
+  );
+  assert.throws(() => saveProduct(data, original), /excluído/);
+  const added = { id: crypto.randomUUID(), name: "ACABAMENTO" };
+  data = saveProduct(data, added);
+  data = saveProduct(data, { ...added, name: "ACABAMENTO NOVO" });
+  data = saveProduct(data, {
+    ...added,
+    name: "ACABAMENTO NOVO",
+    deleted: true,
+  });
+  assert.equal(productNames(data).length, 13);
+});
+
+test("excluir contato mantém vínculos, snapshots e filtros históricos", () => {
+  let data = emptyData();
+  const architect = {
+    id: crypto.randomUUID(),
+    name: "Arquiteto teste",
+    role: "architect",
+  };
+  data.contacts.push(architect);
+  data = recordVisit(data, draft({ architectId: architect.id }), ids);
+  data = deleteContact(data, architect.id);
+  assert.ok(data.contacts[0].deleted);
+  assert.equal(data.works[0].architectId, architect.id);
+  assert.equal(data.visits[0].architectName, architect.name);
+  assert.equal(
+    filterVisits(data.visits, { architectId: architect.id }).length,
+    1,
+  );
+  assert.throws(
+    () => recordVisit(data, draft({ architectId: architect.id })),
+    /contato foi excluído/,
+  );
+  assert.doesNotThrow(() =>
+    recordVisit(data, draft({ workId: "work-1", architectId: architect.id })),
+  );
+});
 
 test("base vazia contém apenas a configuração dos produtos e colaboradores solicitados", () => {
   const data = emptyData();

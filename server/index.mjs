@@ -14,11 +14,16 @@ import {
   requireOwner,
   requireCatalogAdmin,
   requireContactWrite,
+  requireCatalogChange,
   validateState,
   validateRecord,
 } from "./policy.mjs";
 import { connectionString } from "./connection.mjs";
-import { productKey, productNames } from "../src/lib/domain.mjs";
+import {
+  productKey,
+  productNames,
+  catalogProducts,
+} from "../src/lib/domain.mjs";
 
 const pool = new pg.Pool({
   connectionString: connectionString(process.env.DATABASE_URL),
@@ -177,7 +182,7 @@ app.put("/state", async (c) => {
     if (state.products === undefined) state.products = before.products;
     for (const kind of collections) {
       const incoming = new Map(state[kind].map((row) => [row.id, row]));
-      // As telas atuais não excluem cadastros nem histórico.
+      // Exclusão lógica preserva os vínculos e o histórico de todos os usuários.
       if (before[kind].some((row) => !incoming.has(row.id)))
         fail("Não é permitido remover registros do histórico.");
       const previous = new Map(before[kind].map((row) => [row.id, row]));
@@ -185,15 +190,25 @@ app.put("/state", async (c) => {
         if (isDeepStrictEqual(previous.get(record.id), record)) continue;
         if (kind === "products") {
           requireCatalogAdmin(member);
-          if (previous.has(record.id))
-            fail("O produto já cadastrado deve ser preservado.");
+          requireCatalogChange(
+            catalogProducts(before, true).find((item) => item.id === record.id),
+            record,
+          );
           validateRecord(kind, record);
           if (record.ownerId && record.ownerId !== "shared")
             fail("Produto inválido.");
-          const payload = { id: record.id, name: record.name };
+          const payload = {
+            id: record.id,
+            name: record.name,
+            ...(record.deleted ? { deleted: true } : {}),
+          };
           await db.query(
-            "INSERT INTO famac.products(id,name_key,payload) VALUES ($1,$2,$3)",
-            [record.id, productKey(record.name), payload],
+            "INSERT INTO famac.products(id,name_key,payload) VALUES ($1,$2,$3) ON CONFLICT(id) DO UPDATE SET name_key=excluded.name_key,payload=excluded.payload,updated_at=now()",
+            [
+              record.id,
+              record.deleted ? `deleted:${record.id}` : productKey(record.name),
+              payload,
+            ],
           );
           continue;
         }
@@ -206,9 +221,12 @@ app.put("/state", async (c) => {
         const owner =
           existing.rows[0]?.owner_id ||
           (kind === "visits" || kind === "plans" ? record.userId : actorTeamId);
-        if (kind === "contacts")
+        if (kind === "contacts") {
           requireContactWrite(member, owner, existing.rows[0]?.payload, record);
-        else requireOwner(member, owner);
+          requireCatalogChange(existing.rows[0]?.payload, record);
+          if (record.deleted && !existing.rowCount)
+            fail("Contato indisponível.");
+        } else requireOwner(member, owner);
         if (record.ownerId && record.ownerId !== owner)
           fail("Não é permitido transferir a autoria.", 403);
         if ((kind === "visits" || kind === "plans") && record.userId !== owner)
@@ -227,6 +245,19 @@ app.put("/state", async (c) => {
           );
           if (!contact.rowCount || contact.rows[0].payload.role !== role)
             fail("Contato indisponível para esta obra.", 403);
+          if (contact.rows[0].payload.deleted) {
+            let inherited = existing.rows[0]?.payload[key];
+            if (kind === "visits") {
+              const work = await db.query(
+                "SELECT payload,owner_id FROM famac.works WHERE id=$1",
+                [record.workId],
+              );
+              if (work.rows[0]?.owner_id === owner)
+                inherited = work.rows[0].payload[key];
+            }
+            if (inherited !== record[key])
+              fail("Este contato foi excluído. Selecione outro contato.");
+          }
         }
         if (kind === "visits" || kind === "plans") {
           const work = await db.query(

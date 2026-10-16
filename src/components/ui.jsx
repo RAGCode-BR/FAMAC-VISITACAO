@@ -29,6 +29,7 @@ const paths = {
   trend: "m3 17 6-6 4 4 8-10 M15 5h6v6",
   clock: "M12 8v5l3 2 M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z",
   edit: "m16 3 5 5-12 12-6 1 1-6L16 3Z m-2 2 5 5",
+  trash: "M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7",
   info: "M12 11v6 M12 7h.01 M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z",
   phone: "m5 3 4 4-2 3a16 16 0 0 0 7 7l3-2 4 4c-1 5-7 3-12-1S1 5 5 3Z",
 };
@@ -190,6 +191,7 @@ export function ContactForm({ initial, role, data, save, onClose, onCreated }) {
     if (!form.name.trim()) return setError("Informe o nome do contato.");
     const duplicate = data.contacts.find(
       (item) =>
+        !item.deleted &&
         normalize(item.name) === normalize(form.name) &&
         item.role === form.role &&
         item.id !== form.id,
@@ -201,17 +203,21 @@ export function ContactForm({ initial, role, data, save, onClose, onCreated }) {
     setBusy(true);
     try {
       const contact = { ...form, name: form.name.trim(), id: form.id || uid() };
-      await save(
-        (current) => ({
+      await save((current) => {
+        if (
+          form.id &&
+          current.contacts.find((item) => item.id === form.id)?.deleted
+        )
+          throw new Error("Este contato já foi excluído.");
+        return {
           ...current,
           contacts: form.id
             ? current.contacts.map((item) =>
                 item.id === form.id ? contact : item,
               )
             : [...current.contacts, contact],
-        }),
-        "Contato salvo.",
-      );
+        };
+      }, "Contato salvo.");
       onCreated?.(contact);
       onClose();
     } catch (cause) {
@@ -320,6 +326,7 @@ export function ContactPicker({
       data.contacts
         .filter(
           (item) =>
+            !item.deleted &&
             item.role === role &&
             normalize(item.name).includes(normalize(query)),
         )

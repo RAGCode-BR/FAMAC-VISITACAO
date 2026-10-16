@@ -3,6 +3,7 @@ import {
   PRODUCTS,
   productKey,
   productName,
+  catalogProducts,
   validateVisit,
 } from "../src/lib/domain.mjs";
 import { isSharedContact } from "../src/lib/contacts.mjs";
@@ -25,7 +26,7 @@ export function requireOwner(member, ownerId) {
 }
 export function requireCatalogAdmin(member) {
   if (member.role !== "admin")
-    fail("Somente a administração pode cadastrar produtos.", 403);
+    fail("Somente a administração pode gerenciar produtos.", 403);
 }
 export function requireContactWrite(member, ownerId, previous, next) {
   if (isSharedContact(previous) && isSharedContact(next)) return;
@@ -46,13 +47,19 @@ export function validateState(state) {
         fail("Registro muito grande.");
     }
     if (kind === "products") {
-      const keys = state.products.map((item) => productKey(item.name));
+      const keys = catalogProducts(state).map((item) => productKey(item.name));
       if (new Set(keys).size !== keys.length)
         fail("Há produtos com nomes repetidos.");
     }
   }
 }
 export function validateRecord(kind, record, allowedProducts = PRODUCTS) {
+  if (
+    record.deleted !== undefined &&
+    (typeof record.deleted !== "boolean" ||
+      !["products", "contacts"].includes(kind))
+  )
+    fail("Exclusão inválida.");
   if (kind === "products") {
     if (
       typeof record.name !== "string" ||
@@ -61,8 +68,6 @@ export function validateRecord(kind, record, allowedProducts = PRODUCTS) {
       record.name !== productName(record.name)
     )
       fail("Informe um nome de produto válido, de até 80 caracteres.");
-    if (PRODUCTS.some((name) => productKey(name) === productKey(record.name)))
-      fail("Já existe um produto com esse nome.");
   } else if (kind === "contacts") {
     if (
       typeof record.name !== "string" ||
@@ -119,5 +124,20 @@ export function validateRecord(kind, record, allowedProducts = PRODUCTS) {
       !["planned", "completed", "cancelled"].includes(record.status)
     )
       fail("Programação inválida.");
+  }
+}
+
+export function requireCatalogChange(previous, next) {
+  if (previous?.deleted)
+    fail("Este cadastro já foi excluído. Atualize a página.", 409);
+  // A exclusão altera apenas a disponibilidade e mantém os dados vinculados.
+  if (next.deleted && previous) {
+    const { ownerId: _owner, deleted: _deleted, ...record } = next;
+    const { ownerId: _oldOwner, deleted: _oldDeleted, ...original } = previous;
+    if (
+      JSON.stringify(Object.entries(record).sort()) !==
+      JSON.stringify(Object.entries(original).sort())
+    )
+      fail("Exclua o cadastro sem alterar seus dados.");
   }
 }
