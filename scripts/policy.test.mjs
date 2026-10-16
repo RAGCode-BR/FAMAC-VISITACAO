@@ -4,6 +4,8 @@ import {
   requireOwner,
   requireContactWrite,
   validateState,
+  validateRecord,
+  requireCatalogAdmin,
 } from "../server/policy.mjs";
 import { pinIdentity } from "../src/lib/identity.mjs";
 
@@ -42,6 +44,30 @@ test("o servidor recusa identificadores repetidos ou inválidos", () => {
   const record = { id: "d2cbf329-6263-4ffa-8e7e-84ec983ee7f4" };
   assert.throws(() => validateState({ ...state, works: [record, record] }));
   assert.throws(() => validateState({ ...state, works: [{ id: "unsafe" }] }));
+});
+
+test("produtos exigem administração e nomes únicos inclusive acentos e espaços", () => {
+  assert.throws(() => requireCatalogAdmin({ role: "collaborator" }), {
+    status: 403,
+  });
+  assert.doesNotThrow(() => requireCatalogAdmin({ role: "admin" }));
+  assert.throws(
+    () => validateRecord("products", { name: "DIVISORIAS" }),
+    /Já existe/,
+  );
+  assert.throws(() => validateRecord("products", { name: "" }));
+  const state = {
+    version: 1,
+    contacts: [],
+    works: [],
+    visits: [],
+    plans: [],
+    products: [
+      { id: "d2cbf329-6263-4ffa-8e7e-84ec983ee7f4", name: "ACABAMENTO NOVO" },
+      { id: "d2cbf329-6263-4ffa-8e7e-84ec983ee7f5", name: "acabamento  novo" },
+    ],
+  };
+  assert.throws(() => validateState(state), /repetidos/);
 });
 
 test("arquitetos e empreiteiros compartilhados não liberam contatos privados nem transferência de cargo", () => {

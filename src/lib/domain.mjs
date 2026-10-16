@@ -26,6 +26,7 @@ export const STAGES = {
 };
 export const emptyData = () => ({
   version: 1,
+  products: [],
   works: [],
   contacts: [],
   visits: [],
@@ -52,6 +53,19 @@ export const normalize = (value) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase("pt-BR")
     .trim();
+export const productKey = (name) => normalize(name).replace(/\s+/g, " ");
+export const productName = (name) =>
+  String(name || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleUpperCase("pt-BR");
+export const productNames = (data) => [
+  ...new Map(
+    [...PRODUCTS, ...(data.products || []).map((item) => item.name)]
+      .filter((name) => typeof name === "string" && name.trim())
+      .map((name) => [productKey(name), name]),
+  ).values(),
+];
 export const uid = () => crypto.randomUUID();
 export const person = (id) =>
   TEAM.find((item) => item.id === id)?.name || "Não informado";
@@ -90,7 +104,7 @@ export const newVisit = (userId) => ({
   photos: [],
 });
 
-export function validateVisit(visit) {
+export function validateVisit(visit, allowedProducts = PRODUCTS) {
   if (!visit.date || visit.date > today())
     throw new Error(
       "Informe uma data de visita até hoje. Para datas futuras, use a programação.",
@@ -120,7 +134,7 @@ export function validateVisit(visit) {
     throw new Error("Selecione pelo menos um produto oferecido.");
   if (
     [...visit.offered, ...visit.sold].some(
-      (product) => !PRODUCTS.includes(product),
+      (product) => !allowedProducts.includes(product),
     )
   )
     throw new Error("Produto inválido.");
@@ -149,7 +163,7 @@ export function recordVisit(
   draft,
   { visitId = uid(), workId = uid(), planId = uid() } = {},
 ) {
-  validateVisit(draft);
+  validateVisit(draft, productNames(data));
   const existing = data.works.find((item) => item.id === draft.workId);
   if (draft.workId && !existing)
     throw new Error("A obra selecionada não está mais disponível.");
@@ -237,9 +251,12 @@ export function filterVisits(visits, filters) {
   );
 }
 
-export function summarize(visits) {
+export function summarize(visits, catalog = PRODUCTS) {
   const sales = visits.filter((item) => item.sold.length);
-  const products = PRODUCTS.map((name) => ({
+  const names = [
+    ...new Set([...catalog, ...visits.flatMap((item) => item.offered)]),
+  ];
+  const products = names.map((name) => ({
     name,
     offered: visits.filter((item) => item.offered.includes(name)).length,
     sold: visits.filter((item) => item.sold.includes(name)).length,

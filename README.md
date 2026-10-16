@@ -33,7 +33,8 @@ O build está em `dist/`; a prévia do build usa **http://127.0.0.1:4174/**. Cad
 - Fotos por câmera/galeria, com até 6 imagens, limitadas a 12 MB por arquivo antes da otimização local.
 - Histórico de visitas e detalhes com fotos, observações e próxima ação.
 - Programação por dia/semana/mês, retorno opcional ao registrar visita, conclusão e motivo de não realização.
-- Cadastro e edição de obras e contatos; portfólio dos 14 produtos.
+- Cadastro e edição de obras e contatos, com paginação de 12 registros e filtros sobre a lista completa.
+- Catálogo com 14 produtos iniciais e novos produtos cadastrados pela administração, disponíveis para toda a equipe.
 - Visão geral, equipe e relatórios com filtros combinados, rankings, exportação CSV e impressão/PDF.
 - Login com PIN e senha, alteração de senha e redefinição pela administração, sem e-mail de acesso.
 - Integração com Postgres, Auth, Functions e Object Storage do Neon. Arquitetos e empreiteiros são compartilhados; obras, visitas, programação e fotos ficam restritos ao colaborador. A administração consulta a equipe.
@@ -60,6 +61,10 @@ Consulte [Configuração e operação do Neon](docs/NEON.md), [Modelo do banco e
 - **Visita com venda:** registro com um ou mais produtos vendidos. É contado uma vez, mesmo com vários produtos.
 - **Visita de prospecção:** registro classificado como Prospecção. Uma visita com produto vendido passa a Fechamento.
 - **Conversão:** visitas com venda divididas pelas visitas dos filtros, sem divisão por zero.
+- **Presença em campo:** quantidade de visitas e dias distintos com visita registrada, sem inferir jornada, faltas ou metas.
+- **Participação:** visitas do colaborador divididas pelas visitas autorizadas nos filtros atuais.
+- **Valor médio por visita com venda:** valor vendido dividido pelo número de visitas com venda; sem vendas, o indicador exibe um traço.
+- A evolução por data usa até 12 intervalos e inclui intervalos sem visitas. Os gráficos de KPI acompanham os mesmos filtros das tabelas e exportações.
 - **Valor vendido:** total informado na visita, opcional. Não há rateio de valor por produto. Filtrar um produto seleciona visitas com esse produto; o valor exibido continua sendo o total dessas visitas.
 - Rankings de bairros separam municípios e UFs para não juntar bairros homônimos.
 - Os filtros se aplicam às visitas, usando os nomes dos contatos registrados na época. Gráficos mostram os produtos presentes nessas visitas; um filtro de produto não divide o valor ou remove outros produtos da mesma visita.

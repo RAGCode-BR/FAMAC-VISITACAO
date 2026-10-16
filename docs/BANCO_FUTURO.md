@@ -9,7 +9,7 @@ O provedor escolhido é Neon. A configuração e a operação estão descritas e
 | Perfis             | Identidade autenticada, nome do colaborador e permissão                                                    |
 | Contatos           | Nome, função (empreiteiro/arquiteto/responsável), telefone, cidade, empresa e observações; arquitetos e empreiteiros compartilhados |
 | Obras              | Nome, tipo, responsável, telefone, endereço e bairro; vínculos com os contatos                             |
-| Produtos           | Catálogo dos 14 produtos informados                                                                        |
+| Produtos           | 14 produtos iniciais e produtos adicionais compartilhados, criados pela administração; nomes únicos |
 | Visitas            | Obra, data, colaborador, endereço e contatos na época, tipo de visita, notas, total vendido e próxima ação |
 | Produtos da visita | Produto oferecido e indicador de venda; sem atribuição automática do valor da visita a cada item           |
 | Programações       | Obra, colaborador, data, objetivo, situação, motivo de não realização e visita correspondente              |

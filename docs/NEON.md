@@ -37,6 +37,8 @@ O comando inicial `neon init --agent codex` instala o plugin Neon com a configur
 
 O schema `famac` contém membros, obras, contatos, visitas, programação, referências de fotos, revisão e operações. Dados são salvos por registro, com autoria no servidor. A API verifica JWT do Neon Auth e o vínculo fixo da conta antes de consultar ou alterar dados. A interface não acessa Postgres nem S3 com credenciais próprias.
 
+`famac.products` armazena produtos adicionais do catálogo. Os 14 produtos iniciais continuam definidos no domínio. A criação exige administrador no servidor; produtos adicionais são compartilhados, têm nomes únicos normalizados e podem ser oferecidos/vendidos nas visitas e usados nos relatórios. O histórico preserva os nomes dos produtos; não há exclusão ou renomeação. Clientes antigos que omitam a coleção `products` em um salvamento preservam o catálogo remoto.
+
 O salvamento de obra, visita e retorno é transacional. Uma revisão evita sobrescrever alterações de outro dispositivo; em conflito, o app atualiza a base, preserva os campos em preenchimento e pede uma nova tentativa. Operações têm identificação para confirmar commits cuja resposta se perdeu.
 
 A atualização automática consulta `/state?since=<revisão>` a cada 30 segundos quando a aba está visível, ao voltar à janela e ao recuperar a conexão. Sem mudanças, a API retorna 204 e não transmite toda a base. Não há consulta contínua com a aba oculta; respostas anteriores a um salvamento são descartadas. Rascunhos de visita são preservados e a atualização pausa enquanto há um modal aberto para evitar sobrescrever edições de contato. Não utiliza o serviço Neon Realtime.
@@ -61,6 +63,8 @@ npm run build
 ```
 
 Para a suíte visual da prévia, iniciar Vite na porta 5174 com `VITE_FAMAC_MODE=local`, depois executar `npm run test:ui`. Os contextos são descartáveis.
+
+`npm run test:features` verifica Contatos/Obras com múltiplas páginas, filtros, cadastro e persistência de produto, uso em venda, KPI, três larguras de tela e PDF. A suíte exige a prévia local antes de inserir dados fictícios em um contexto descartável; não usa a produção. Capturas ficam em `test-results/reports-kpi-*.png`.
 
 A suíte `npm run test:neon` exige uma branch **temporária** `famac-e2e-*`. Criar uma branch isolada, aplicar a configuração e as migrações e configurar quatro contas exclusivas de teste. Caso seja uma cópia normal da produção, a limpeza e a substituição das contas devem ocorrer somente nessa cópia, sempre verificando o nome da branch. Salvar ambiente em `test-results/neon.env.local` e acessos em `test-results/neon-access.local`, preservando o ambiente de produção. O runner valida o nome da branch, limpa somente suas fixtures, usa contextos descartáveis e verifica login, compartilhamento de contatos, isolamento de obras/fotos, atualização automática com preservação do rascunho, suspensão em segundo plano, relatórios, conflitos, senhas e celular. Ao concluir, excluir a branch temporária. Nunca usar as credenciais de produção para a suíte com fixtures.
 

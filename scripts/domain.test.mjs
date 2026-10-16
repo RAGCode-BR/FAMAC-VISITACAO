@@ -11,6 +11,7 @@ import {
   summarize,
   today,
   validateVisit,
+  productNames,
   visitsCsv,
 } from "../src/lib/domain.mjs";
 
@@ -32,6 +33,7 @@ test("base vazia contém apenas a configuração dos produtos e colaboradores so
   const data = emptyData();
   assert.deepEqual(data, {
     version: 1,
+    products: [],
     works: [],
     contacts: [],
     visits: [],
@@ -43,6 +45,28 @@ test("base vazia contém apenas a configuração dos produtos e colaboradores so
     TEAM.map((user) => user.name),
     ["Claudionor", "Charles", "Celso"],
   );
+});
+
+test("produto cadastrado entra na visita e nos indicadores sem alterar o catálogo inicial", () => {
+  const data = {
+    ...emptyData(),
+    products: [{ id: "produto-teste", name: "ACABAMENTO TESTE" }],
+  };
+  assert.equal(productNames(data).length, 15);
+  const custom = draft({
+    offered: ["ACABAMENTO TESTE"],
+    sold: ["ACABAMENTO TESTE"],
+    stage: "closing",
+    saleValue: "300",
+  });
+  assert.throws(() => validateVisit(custom), /Produto inválido/);
+  const saved = recordVisit(data, custom, ids);
+  const stats = summarize(saved.visits, productNames(saved));
+  assert.equal(
+    stats.products.find((item) => item.name === "ACABAMENTO TESTE").sold,
+    1,
+  );
+  assert.equal(PRODUCTS.length, 14);
 });
 test("bairro obrigatório, telefone com DDD, datas e coerência de produtos", () => {
   assert.doesNotThrow(() =>
@@ -91,7 +115,10 @@ test("relacionamento pode ser salvo sem produtos e permanece nos relatórios", (
   const filtered = filterVisits(data.visits, { stage: "relationship" });
   assert.equal(filtered.length, 1);
   assert.equal(summarize(filtered).visits, 1);
-  assert.equal(summarize(filtered).products.some((item) => item.offered), false);
+  assert.equal(
+    summarize(filtered).products.some((item) => item.offered),
+    false,
+  );
 });
 test("uma visita cria obra e retorno na mesma alteração sem modificar o estado anterior", () => {
   const before = emptyData();

@@ -12,11 +12,13 @@ import {
   validId,
   fail,
   requireOwner,
+  requireCatalogAdmin,
   requireContactWrite,
   validateState,
   validateRecord,
 } from "./policy.mjs";
 import { connectionString } from "./connection.mjs";
+import { productKey, productNames } from "../src/lib/domain.mjs";
 
 const pool = new pg.Pool({
   connectionString: connectionString(process.env.DATABASE_URL),
@@ -93,8 +95,8 @@ async function readState(db, member, since) {
         ? "WHERE owner_id=$1 OR payload->>'role' IN ('architect','contractor')"
         : "WHERE owner_id=$1";
     const result = await db.query(
-      `SELECT payload, owner_id FROM famac.${kind} ${member.role === "admin" ? "" : where} ORDER BY updated_at,id`,
-      member.role === "admin" ? [] : [member.teamId],
+      `SELECT payload, owner_id FROM famac.${kind} ${member.role === "admin" || kind === "products" ? "" : where} ORDER BY updated_at,id`,
+      member.role === "admin" || kind === "products" ? [] : [member.teamId],
     );
     state[kind] = result.rows.map((row) => ({
       ...row.payload,
@@ -172,6 +174,7 @@ app.put("/state", async (c) => {
         409,
       );
     const before = await readState(db, member);
+    if (state.products === undefined) state.products = before.products;
     for (const kind of collections) {
       const incoming = new Map(state[kind].map((row) => [row.id, row]));
       // As telas atuais não excluem cadastros nem histórico.
@@ -180,6 +183,20 @@ app.put("/state", async (c) => {
       const previous = new Map(before[kind].map((row) => [row.id, row]));
       for (const record of state[kind]) {
         if (isDeepStrictEqual(previous.get(record.id), record)) continue;
+        if (kind === "products") {
+          requireCatalogAdmin(member);
+          if (previous.has(record.id))
+            fail("O produto já cadastrado deve ser preservado.");
+          validateRecord(kind, record);
+          if (record.ownerId && record.ownerId !== "shared")
+            fail("Produto inválido.");
+          const payload = { id: record.id, name: record.name };
+          await db.query(
+            "INSERT INTO famac.products(id,name_key,payload) VALUES ($1,$2,$3)",
+            [record.id, productKey(record.name), payload],
+          );
+          continue;
+        }
         if (kind === "visits" && previous.has(record.id))
           fail("O histórico de visitas deve ser preservado.");
         const existing = await db.query(
@@ -196,7 +213,7 @@ app.put("/state", async (c) => {
           fail("Não é permitido transferir a autoria.", 403);
         if ((kind === "visits" || kind === "plans") && record.userId !== owner)
           fail("O colaborador do registro não corresponde à autoria.", 403);
-        validateRecord(kind, record);
+        validateRecord(kind, record, productNames(state));
         const payload = { ...record };
         delete payload.ownerId;
         for (const [key, role] of [
@@ -330,6 +347,8 @@ app.delete("/photos/:id", async (c) => {
 });
 app.onError((error, c) => {
   if (error.status) return c.json({ error: error.message }, error.status);
+  if (error.code === "23505" && error.constraint === "products_name_key_key")
+    return c.json({ error: "Já existe um produto com esse nome." }, 409);
   if (error instanceof SyntaxError || error instanceof TypeError)
     return c.json({ error: "Formato de dados inválido." }, 400);
   console.error("FAMAC request failed", { code: error.code || "unknown" });

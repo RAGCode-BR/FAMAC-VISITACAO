@@ -1,7 +1,13 @@
-import { TEAM, validateVisit } from "../src/lib/domain.mjs";
+import {
+  TEAM,
+  PRODUCTS,
+  productKey,
+  productName,
+  validateVisit,
+} from "../src/lib/domain.mjs";
 import { isSharedContact } from "../src/lib/contacts.mjs";
 
-export const collections = ["contacts", "works", "visits", "plans"];
+export const collections = ["products", "contacts", "works", "visits", "plans"];
 export const validId = (id) =>
   typeof id === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -17,6 +23,10 @@ export function requireOwner(member, ownerId) {
   if (member.role !== "admin" && member.teamId !== ownerId)
     fail("Você só pode acessar seus próprios registros.", 403);
 }
+export function requireCatalogAdmin(member) {
+  if (member.role !== "admin")
+    fail("Somente a administração pode cadastrar produtos.", 403);
+}
 export function requireContactWrite(member, ownerId, previous, next) {
   if (isSharedContact(previous) && isSharedContact(next)) return;
   requireOwner(member, ownerId);
@@ -24,6 +34,8 @@ export function requireContactWrite(member, ownerId, previous, next) {
 export function validateState(state) {
   if (!state || state.version !== 1) fail("Formato de dados inválido.");
   for (const kind of collections) {
+    // Compatibilidade com versões anteriores do navegador e da prévia local.
+    if (kind === "products" && state.products === undefined) continue;
     if (!Array.isArray(state[kind])) fail("Formato de dados inválido.");
     const ids = new Set();
     for (const record of state[kind]) {
@@ -33,10 +45,25 @@ export function validateState(state) {
       if (JSON.stringify(record).length > 100_000)
         fail("Registro muito grande.");
     }
+    if (kind === "products") {
+      const keys = state.products.map((item) => productKey(item.name));
+      if (new Set(keys).size !== keys.length)
+        fail("Há produtos com nomes repetidos.");
+    }
   }
 }
-export function validateRecord(kind, record) {
-  if (kind === "contacts") {
+export function validateRecord(kind, record, allowedProducts = PRODUCTS) {
+  if (kind === "products") {
+    if (
+      typeof record.name !== "string" ||
+      !record.name.trim() ||
+      record.name.length > 80 ||
+      record.name !== productName(record.name)
+    )
+      fail("Informe um nome de produto válido, de até 80 caracteres.");
+    if (PRODUCTS.some((name) => productKey(name) === productKey(record.name)))
+      fail("Já existe um produto com esse nome.");
+  } else if (kind === "contacts") {
     if (
       typeof record.name !== "string" ||
       !record.name.trim() ||
@@ -73,7 +100,7 @@ export function validateRecord(kind, record) {
     if (!Array.isArray(record.offered) || !Array.isArray(record.sold))
       fail("Seleção de produtos inválida.");
     try {
-      validateVisit(record);
+      validateVisit(record, allowedProducts);
     } catch (error) {
       fail(error.message);
     }

@@ -534,8 +534,20 @@ function App({ account, onLogout }) {
               onVisit={startVisit}
             />
           )}
-          {page === "reports" && <Reports data={data} onDetail={setDetail} />}
-          {page === "catalog" && <Catalog data={data} />}
+          {page === "reports" && (
+            <Reports
+              data={data}
+              onDetail={setDetail}
+              team={
+                account?.role === "collaborator"
+                  ? TEAM.filter((user) => user.id === account.teamId)
+                  : TEAM
+              }
+            />
+          )}
+          {page === "catalog" && (
+            <Catalog data={data} save={save} canManage={canAssign} />
+          )}
           {page === "team" && canAssign && (
             <Team
               data={data}

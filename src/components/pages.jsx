@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from "react";
 import {
-  PRODUCTS,
+  productNames,
+  productName,
+  productKey,
   TEAM,
   STAGES,
   addressLabel,
@@ -18,6 +20,8 @@ import {
 import Pagination from "./Pagination.jsx";
 import VisitPhoto from "./VisitPhoto.jsx";
 import { contactPhones } from "../lib/contacts.mjs";
+import { teamIndicators } from "../lib/reporting.mjs";
+import { ReportOverview, TeamKpis } from "./ReportInsights.jsx";
 import { AccessManagement } from "./AuthGate.jsx";
 import {
   AddressFields,
@@ -289,7 +293,7 @@ export function Dashboard({ data, navigate, onDetail }) {
   const visits = data.visits.filter(
     (item) => item.date.slice(0, 7) === today().slice(0, 7),
   );
-  const stats = summarize(visits);
+  const stats = summarize(visits, productNames(data));
   const upcoming = data.plans
     .filter((item) => item.status === "planned" && item.date >= today())
     .sort((a, b) => a.date.localeCompare(b.date))
@@ -450,15 +454,22 @@ export function Dashboard({ data, navigate, onDetail }) {
 }
 
 export function Contacts({ data, save, onDetail }) {
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("");
   const [editing, setEditing] = useState(null);
-  const contacts = data.contacts.filter(
-    (item) =>
-      (!role || item.role === role) &&
-      normalize(
-        `${item.name} ${item.company || ""} ${item.city || ""}`,
-      ).includes(normalize(search)),
+  const contacts = data.contacts
+    .filter(
+      (item) =>
+        (!role || item.role === role) &&
+        normalize(
+          `${item.name} ${item.company || ""} ${item.city || ""}`,
+        ).includes(normalize(search)),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const currentPage = Math.min(
+    page,
+    Math.max(1, Math.ceil(contacts.length / 12)),
   );
   return (
     <>
@@ -487,7 +498,10 @@ export function Contacts({ data, save, onDetail }) {
               <button
                 key={id}
                 className={role === id ? "active" : ""}
-                onClick={() => setRole(id)}
+                onClick={() => {
+                  setRole(id);
+                  setPage(1);
+                }}
               >
                 {label}
               </button>
@@ -498,64 +512,69 @@ export function Contacts({ data, save, onDetail }) {
             <input
               aria-label="Buscar contatos"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
               placeholder="Buscar nome, cidade ou empresa…"
             />
           </div>
         </div>
         {contacts.length ? (
           <div className="contact-grid">
-            {contacts.map((item) => {
-              const visits = data.visits.filter(
-                (visit) =>
-                  visit.contractorId === item.id ||
-                  visit.architectId === item.id,
-              );
-              return (
-                <article className="contact-card" key={item.id}>
-                  <div className="card-top">
-                    <span className="contact-avatar">
-                      {item.name.slice(0, 2).toUpperCase()}
-                    </span>
-                    <button
-                      className="icon-button"
-                      aria-label={`Editar ${item.name}`}
-                      onClick={() => setEditing(item)}
-                    >
-                      <Icon name="edit" size={17} />
-                    </button>
-                  </div>
-                  <h3>{item.name}</h3>
-                  <Badge tone={item.role === "architect" ? "blue" : ""}>
-                    {roleName(item.role)}
-                  </Badge>
-                  {item.company && <p>{item.company}</p>}
-                  {item.city && <p>{item.city}</p>}
-                  {contactPhones(item).map((phone) => (
-                    <a
-                      key={phone}
-                      className="contact-phone"
-                      href={`tel:${phone.replace(/\D/g, "")}`}
-                    >
-                      <Icon name="phone" size={15} />
-                      {phone}
-                    </a>
-                  ))}
-                  <div className="card-bottom">
-                    <span>{visits.length} visitas vinculadas</span>
-                    {visits.length > 0 && (
+            {contacts
+              .slice((currentPage - 1) * 12, currentPage * 12)
+              .map((item) => {
+                const visits = data.visits.filter(
+                  (visit) =>
+                    visit.contractorId === item.id ||
+                    visit.architectId === item.id,
+                );
+                return (
+                  <article className="contact-card" key={item.id}>
+                    <div className="card-top">
+                      <span className="contact-avatar">
+                        {item.name.slice(0, 2).toUpperCase()}
+                      </span>
                       <button
-                        className="button text-button"
-                        onClick={() => onDetail(visits.at(-1))}
+                        className="icon-button"
+                        aria-label={`Editar ${item.name}`}
+                        onClick={() => setEditing(item)}
                       >
-                        Última visita
-                        <Icon name="arrow" size={14} />
+                        <Icon name="edit" size={17} />
                       </button>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
+                    </div>
+                    <h3>{item.name}</h3>
+                    <Badge tone={item.role === "architect" ? "blue" : ""}>
+                      {roleName(item.role)}
+                    </Badge>
+                    {item.company && <p>{item.company}</p>}
+                    {item.city && <p>{item.city}</p>}
+                    {contactPhones(item).map((phone) => (
+                      <a
+                        key={phone}
+                        className="contact-phone"
+                        href={`tel:${phone.replace(/\D/g, "")}`}
+                      >
+                        <Icon name="phone" size={15} />
+                        {phone}
+                      </a>
+                    ))}
+                    <div className="card-bottom">
+                      <span>{visits.length} visitas vinculadas</span>
+                      {visits.length > 0 && (
+                        <button
+                          className="button text-button"
+                          onClick={() => onDetail(visits.at(-1))}
+                        >
+                          Última visita
+                          <Icon name="arrow" size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
           </div>
         ) : (
           <Empty
@@ -577,6 +596,13 @@ export function Contacts({ data, save, onDetail }) {
             }
           />
         )}
+        <Pagination
+          page={currentPage}
+          totalItems={contacts.length}
+          pageSize={12}
+          onChange={setPage}
+          itemLabel="contatos"
+        />
       </section>
       {editing && (
         <ContactForm
@@ -730,16 +756,20 @@ function WorkForm({ initial, data, save, onClose }) {
 }
 
 export function Works({ data, save, onVisit }) {
+  const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
   const [type, setType] = useState("");
   const [editing, setEditing] = useState(null);
-  const works = data.works.filter(
-    (item) =>
-      (!type || item.type === type) &&
-      normalize(
-        `${item.name} ${item.neighborhood} ${item.city} ${item.responsible}`,
-      ).includes(normalize(query)),
-  );
+  const works = data.works
+    .filter(
+      (item) =>
+        (!type || item.type === type) &&
+        normalize(
+          `${item.name} ${item.neighborhood} ${item.city} ${item.responsible}`,
+        ).includes(normalize(query)),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(works.length / 12)));
   return (
     <>
       <div className="directory-intro">
@@ -763,13 +793,19 @@ export function Works({ data, save, onVisit }) {
               value={query}
               aria-label="Buscar obras"
               placeholder="Buscar obra, bairro ou responsável…"
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPage(1);
+              }}
             />
           </div>
           <select
             aria-label="Filtrar tipo de obra"
             value={type}
-            onChange={(event) => setType(event.target.value)}
+            onChange={(event) => {
+              setType(event.target.value);
+              setPage(1);
+            }}
           >
             <option value="">Todos os tipos de obra</option>
             <option>Residencial</option>
@@ -779,89 +815,91 @@ export function Works({ data, save, onVisit }) {
         </div>
         {works.length ? (
           <div className="works-grid">
-            {works.map((item) => {
-              const visits = data.visits.filter(
-                (visit) => visit.workId === item.id,
-              );
-              return (
-                <article className="work-card" key={item.id}>
-                  <div className="work-card-header">
-                    <span className="work-symbol">
-                      <Icon name="building" size={27} />
-                    </span>
-                    <Badge tone={item.type === "Comercial" ? "blue" : ""}>
-                      {item.type}
-                    </Badge>
-                  </div>
-                  <h3>{item.name}</h3>
-                  <p className="work-location">
-                    <Icon name="visit" size={15} />
-                    {item.neighborhood} · {item.city}/{item.state}
-                  </p>
-                  <p className="muted">
-                    {item.street}
-                    {item.number && `, ${item.number}`}
-                  </p>
-                  <dl>
-                    <div>
-                      <dt>Empreiteiro</dt>
-                      <dd>
-                        {data.contacts.find(
-                          (contact) => contact.id === item.contractorId,
-                        )?.name || "Não informado"}
-                      </dd>
+            {works
+              .slice((currentPage - 1) * 12, currentPage * 12)
+              .map((item) => {
+                const visits = data.visits.filter(
+                  (visit) => visit.workId === item.id,
+                );
+                return (
+                  <article className="work-card" key={item.id}>
+                    <div className="work-card-header">
+                      <span className="work-symbol">
+                        <Icon name="building" size={27} />
+                      </span>
+                      <Badge tone={item.type === "Comercial" ? "blue" : ""}>
+                        {item.type}
+                      </Badge>
                     </div>
-                    <div>
-                      <dt>Arquiteto</dt>
-                      <dd>
-                        {data.contacts.find(
-                          (contact) => contact.id === item.architectId,
-                        )?.name || "Não informado"}
-                      </dd>
+                    <h3>{item.name}</h3>
+                    <p className="work-location">
+                      <Icon name="visit" size={15} />
+                      {item.neighborhood} · {item.city}/{item.state}
+                    </p>
+                    <p className="muted">
+                      {item.street}
+                      {item.number && `, ${item.number}`}
+                    </p>
+                    <dl>
+                      <div>
+                        <dt>Empreiteiro</dt>
+                        <dd>
+                          {data.contacts.find(
+                            (contact) => contact.id === item.contractorId,
+                          )?.name || "Não informado"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Arquiteto</dt>
+                        <dd>
+                          {data.contacts.find(
+                            (contact) => contact.id === item.architectId,
+                          )?.name || "Não informado"}
+                        </dd>
+                      </div>
+                    </dl>
+                    <div className="work-stats">
+                      <span>
+                        <b>{visits.length}</b> visitas
+                      </span>
+                      <span>
+                        <b>
+                          {visits.filter((visit) => visit.sold.length).length}
+                        </b>{" "}
+                        com venda
+                      </span>
                     </div>
-                  </dl>
-                  <div className="work-stats">
-                    <span>
-                      <b>{visits.length}</b> visitas
-                    </span>
-                    <span>
-                      <b>
-                        {visits.filter((visit) => visit.sold.length).length}
-                      </b>{" "}
-                      com venda
-                    </span>
-                  </div>
-                  <div className="card-bottom">
-                    <button
-                      className="button text-button"
-                      onClick={() =>
-                        setEditing({
-                          ...item,
-                          contractorQuery:
-                            data.contacts.find(
-                              (contact) => contact.id === item.contractorId,
-                            )?.name || "",
-                          architectQuery:
-                            data.contacts.find(
-                              (contact) => contact.id === item.architectId,
-                            )?.name || "",
-                        })
-                      }
-                    >
-                      <Icon name="edit" size={15} />
-                      Editar
-                    </button>
-                    <button
-                      className="button secondary small"
-                      onClick={() => onVisit({ workId: item.id })}
-                    >
-                      Visitar obra
-                      <Icon name="arrow" size={15} />
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
+                    <div className="card-bottom">
+                      <button
+                        className="button text-button"
+                        onClick={() =>
+                          setEditing({
+                            ...item,
+                            contractorQuery:
+                              data.contacts.find(
+                                (contact) => contact.id === item.contractorId,
+                              )?.name || "",
+                            architectQuery:
+                              data.contacts.find(
+                                (contact) => contact.id === item.architectId,
+                              )?.name || "",
+                          })
+                        }
+                      >
+                        <Icon name="edit" size={15} />
+                        Editar
+                      </button>
+                      <button
+                        className="button secondary small"
+                        onClick={() => onVisit({ workId: item.id })}
+                      >
+                        Visitar obra
+                        <Icon name="arrow" size={15} />
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
           </div>
         ) : (
           <Empty
@@ -879,6 +917,13 @@ export function Works({ data, save, onVisit }) {
             }
           />
         )}
+        <Pagination
+          page={currentPage}
+          totalItems={works.length}
+          pageSize={12}
+          onChange={setPage}
+          itemLabel="obras"
+        />
       </section>
       {editing && (
         <WorkForm
@@ -1282,7 +1327,7 @@ function Ranking({ items, unit, onChoose, red = false }) {
   );
 }
 
-export function Reports({ data, onDetail }) {
+export function Reports({ data, onDetail, team = TEAM }) {
   const defaults = {
     start: `${today().slice(0, 7)}-01`,
     end: today(),
@@ -1303,7 +1348,11 @@ export function Reports({ data, onDetail }) {
     () => filterVisits(data.visits, filters),
     [data.visits, filters],
   );
-  const stats = summarize(visits);
+  const stats = summarize(visits, productNames(data));
+  const visibleTeam = filters.userId
+    ? team.filter((user) => user.id === filters.userId)
+    : team;
+  const indicators = teamIndicators(visits, visibleTeam);
   const neighborhoods = [
     ...new Set(data.visits.map((item) => item.neighborhood)),
   ].sort((a, b) => a.localeCompare(b, "pt-BR"));
@@ -1419,7 +1468,7 @@ export function Reports({ data, onDetail }) {
             onChange={set("userId")}
           >
             <option value="">Todos os colaboradores</option>
-            {TEAM.map((item) => (
+            {team.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
               </option>
@@ -1465,7 +1514,7 @@ export function Reports({ data, onDetail }) {
             onChange={set("product")}
           >
             <option value="">Todos os produtos</option>
-            {PRODUCTS.map((name) => (
+            {productNames(data).map((name) => (
               <option key={name}>{name}</option>
             ))}
           </Select>
@@ -1543,6 +1592,7 @@ export function Reports({ data, onDetail }) {
           accent
         />
       </div>
+      <ReportOverview visits={visits} stats={stats} filters={filters} />
       <div className="report-charts">
         <section className="panel">
           <div className="panel-heading">
@@ -1661,10 +1711,11 @@ export function Reports({ data, onDetail }) {
         <div className="panel-heading">
           <div>
             <h2>Presença de cada colaborador</h2>
-            <p>Resultados de acordo com todos os filtros selecionados.</p>
+            <p>Visitas, dias em campo e resultados no período filtrado.</p>
           </div>
           <Icon name="users" />
         </div>
+        <TeamKpis rows={indicators} onChoose={set("userId")} />
         <div className="table-scroll">
           <table>
             <thead>
@@ -1678,10 +1729,8 @@ export function Reports({ data, onDetail }) {
               </tr>
             </thead>
             <tbody>
-              {TEAM.map((user) => {
-                const result = summarize(
-                  visits.filter((item) => item.userId === user.id),
-                );
+              {visibleTeam.map((user) => {
+                const result = indicators.find((item) => item.id === user.id);
                 return (
                   <tr key={user.id}>
                     <td>
@@ -1695,7 +1744,7 @@ export function Reports({ data, onDetail }) {
                     <td>{result.visits}</td>
                     <td>{result.prospecting}</td>
                     <td>{result.sales}</td>
-                    <td>{result.conversion}%</td>
+                    <td>{result.conversion.toLocaleString("pt-BR")}%</td>
                     <td>{money(result.value)}</td>
                   </tr>
                 );
@@ -1766,17 +1815,27 @@ export function Reports({ data, onDetail }) {
   );
 }
 
-export function Catalog({ data }) {
-  const stats = summarize(data.visits);
+export function Catalog({ data, save, canManage = false }) {
+  const stats = summarize(data.visits, productNames(data));
+  const [adding, setAdding] = useState(false);
   return (
     <>
       <div className="catalog-banner">
         <span className="eyebrow">O ACABAMENTO FAZ A DIFERENÇA</span>
         <h2>Possibilidades para cada ambiente.</h2>
         <p>
-          Os 14 produtos da FAMAC, prontos para fazer parte da próxima visita.
+          {stats.products.length} produtos da FAMAC, prontos para fazer parte da
+          próxima visita.
         </p>
       </div>
+      {canManage && (
+        <div className="catalog-actions">
+          <button className="button primary" onClick={() => setAdding(true)}>
+            <Icon name="plus" size={18} />
+            Novo produto
+          </button>
+        </div>
+      )}
       <div className="catalog-grid">
         {stats.products.map((item, index) => (
           <article className="catalog-card" key={item.name}>
@@ -1792,7 +1851,70 @@ export function Catalog({ data }) {
           </article>
         ))}
       </div>
+      {adding && (
+        <ProductForm data={data} save={save} onClose={() => setAdding(false)} />
+      )}
     </>
+  );
+}
+
+function ProductForm({ data, save, onClose }) {
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (event) => {
+    event.preventDefault();
+    const clean = productName(name);
+    if (!clean || clean.length > 80)
+      return setError("Informe um nome de até 80 caracteres.");
+    if (
+      productNames(data).some((item) => productKey(item) === productKey(clean))
+    )
+      return setError("Já existe um produto com esse nome.");
+    setBusy(true);
+    setError("");
+    try {
+      await save(
+        (current) => ({
+          ...current,
+          products: [...(current.products || []), { id: uid(), name: clean }],
+        }),
+        "Produto cadastrado e disponível nas visitas.",
+      );
+      onClose();
+    } catch (cause) {
+      setError(cause.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title="Novo produto" onClose={onClose}>
+      <form onSubmit={submit}>
+        <Field
+          label="Nome do produto"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          required
+          maxLength={80}
+          autoFocus
+          hint="Disponível para toda a equipe nas próximas visitas."
+        />
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        <footer className="modal-actions">
+          <button type="button" className="button secondary" onClick={onClose}>
+            Cancelar
+          </button>
+          <button className="button primary" disabled={busy}>
+            {busy ? "Salvando…" : "Cadastrar produto"}
+          </button>
+        </footer>
+      </form>
+    </Modal>
   );
 }
 

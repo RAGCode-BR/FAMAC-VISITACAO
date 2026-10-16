@@ -29,7 +29,7 @@ await reset.connect();
 try {
   await reset.query("BEGIN");
   await reset.query(
-    "TRUNCATE famac.photos, famac.operations, famac.plans, famac.visits, famac.works, famac.contacts",
+    "TRUNCATE famac.products, famac.photos, famac.operations, famac.plans, famac.visits, famac.works, famac.contacts",
   );
   await reset.query("UPDATE famac.revision SET value=0 WHERE singleton=true");
   await reset.query(
@@ -139,7 +139,13 @@ async function login(account, viewport) {
   await page.locator(".visit-form").waitFor({ timeout: 30000 });
   return { page, context };
 }
-async function register(page, name, relationship = false, architectName = "") {
+async function register(
+  page,
+  name,
+  relationship = false,
+  architectName = "",
+  product = "FORRO",
+) {
   const form = page.locator(".visit-form");
   await form
     .getByLabel("Nome / identificação da obra", { exact: false })
@@ -161,7 +167,13 @@ async function register(page, name, relationship = false, architectName = "") {
       .getByLabel("Tipo de visita", { exact: true })
       .selectOption("relationship");
   else {
-    await form.getByLabel("Oferecer FORRO", { exact: true }).check();
+    await form.getByLabel(`Oferecer ${product}`, { exact: true }).check();
+    if (product !== "FORRO") {
+      await form.getByLabel(`Vendeu ${product}`, { exact: true }).check();
+      await form
+        .getByLabel("Valor total vendido (R$)", { exact: true })
+        .fill("200");
+    }
     await form
       .locator("input[type=file][multiple]")
       .setInputFiles("public/famac-logo.jpg");
@@ -202,6 +214,24 @@ try {
     0,
   );
   let sharedState = (await call(first.page, "/state")).data;
+  const unauthorizedProduct = {
+    ...sharedState,
+    products: [{ id: crypto.randomUUID(), name: "PRODUTO NÃO AUTORIZADO" }],
+  };
+  assert.equal(
+    (
+      await call(first.page, "/state", {
+        method: "PUT",
+        body: JSON.stringify({
+          state: unauthorizedProduct,
+          revision: sharedState.revision,
+          operationId: crypto.randomUUID(),
+          actorTeamId: "claudionor",
+        }),
+      })
+    ).status,
+    403,
+  );
   const sharedArchitect = {
     id: crypto.randomUUID(),
     name: "Arquiteta compartilhada teste",
@@ -417,6 +447,53 @@ try {
   console.log(
     "PASS: administrador consulta as visitas da equipe e os relatórios consolidados",
   );
+  const customProduct = "ACABAMENTO INTEGRACAO";
+  await navigate(management.page, "Produtos");
+  await management.page
+    .getByRole("button", { name: "Novo produto", exact: true })
+    .click();
+  await management.page
+    .getByRole("dialog")
+    .getByLabel("Nome do produto", { exact: false })
+    .fill(customProduct);
+  await management.page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Cadastrar produto", exact: true })
+    .click();
+  await management.page.getByRole("dialog").waitFor({ state: "hidden" });
+  const catalogState = (await call(management.page, "/state")).data;
+  assert.equal(catalogState.products[0].name, customProduct);
+  const legacy = structuredClone(catalogState);
+  delete legacy.products;
+  assert.equal(
+    (
+      await call(management.page, "/state", {
+        method: "PUT",
+        body: JSON.stringify({
+          state: legacy,
+          revision: catalogState.revision,
+          operationId: crypto.randomUUID(),
+          actorTeamId: "claudionor",
+        }),
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await call(first.page, "/state")).data.products[0].name,
+    customProduct,
+  );
+  await first.page.clock.fastForward(31000);
+  await first.page
+    .getByLabel(`Oferecer ${customProduct}`, { exact: true })
+    .waitFor();
+  console.log(
+    "PASS: catálogo compartilhado, criação restrita à administração, navegador antigo preserva produtos e novo produto chega por atualização automática",
+  );
+  // A escrita direta acima simula outro dispositivo; recarregar a interface
+  // antes das próximas ações evita reutilizar a revisão anterior desse teste.
+  await management.page.reload();
+  await management.page.locator(".visit-form").waitFor();
   await navigate(management.page, "Colaboradores");
   await management.page
     .getByRole("button", { name: "Redefinir senha de Charles" })
@@ -439,9 +516,28 @@ try {
     "PASS: administrador redefine senha sem e-mail e colaborador entra com a nova senha",
   );
   await management.page.locator(".topbar select").selectOption("celso");
-  await register(management.page, "Obra de integração Celso", true);
+  await register(
+    management.page,
+    "Obra de integração Celso",
+    false,
+    "",
+    customProduct,
+  );
   const celso = await login(accounts.find((item) => item.teamId === "celso"));
   assert.equal((await call(celso.page, "/state")).data.visits.length, 1);
+  assert.deepEqual((await call(celso.page, "/state")).data.visits[0].sold, [
+    customProduct,
+  ]);
+  await navigate(celso.page, "Produtos");
+  assert.equal(
+    await celso.page
+      .getByRole("button", { name: "Novo produto", exact: true })
+      .count(),
+    0,
+  );
+  await celso.page
+    .getByRole("heading", { name: customProduct, exact: true })
+    .waitFor();
   console.log(
     "PASS: administração cadastra para o colaborador selecionado e Celso consulta somente sua visita",
   );

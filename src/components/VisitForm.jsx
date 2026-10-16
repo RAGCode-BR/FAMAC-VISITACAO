@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  PRODUCTS,
+  productNames,
   TEAM,
   STAGES,
   addressLabel,
@@ -360,7 +360,7 @@ export default function VisitForm({
             </span>
           </div>
           <div className="product-grid">
-            {PRODUCTS.map((product, index) => {
+            {productNames(data).map((product, index) => {
               const selected = form.offered.includes(product);
               const sold = form.sold.includes(product);
               return (
