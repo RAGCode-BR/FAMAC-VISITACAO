@@ -33,6 +33,7 @@ O build está em `dist/`; a prévia do build usa **http://127.0.0.1:4174/**. Cad
 - Fotos por câmera/galeria, com até 6 imagens, limitadas a 12 MB por arquivo antes da otimização local.
 - Histórico de visitas e detalhes com fotos, observações e próxima ação.
 - CRM compartilhado com kanban de cinco etapas, responsável atual, próximos retornos e histórico da equipe. Uma obra mantém a mesma oportunidade entre colaboradores; visitas e fotos privadas conservam sua autoria. Vendas parciais, encerramento com motivo e reabertura são registrados sem apagar o histórico.
+- Negociações encerradas ficam em uma lista própria com busca, filtros e paginação de 12 registros. As etapas finais do quadro exibem somente resumos; reabrir devolve a obra ao acompanhamento. No histórico, vendas feitas durante a visita aparecem acima da visita do mesmo salvamento.
 - Fechamentos do CRM e das visitas são conciliados em um relatório financeiro com filtros e CSV, sem duplicar vendas vinculadas. Quem prospectou e quem vendeu aparecem separadamente. Uma venda lançada no CRM pode ser vinculada à visita do vendedor.
 - Programação por dia/semana/mês, retorno opcional ao registrar visita, conclusão e motivo de não realização. Ações do CRM com data aparecem para seu responsável.
 - Cadastro e edição de obras e contatos, com paginação de 12 registros e filtros sobre a lista completa. Contatos podem ser excluídos com confirmação, preservando vínculos e histórico.

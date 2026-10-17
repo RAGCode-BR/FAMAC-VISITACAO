@@ -21,6 +21,29 @@ export const emptyCrm = () => ({
   sales: [],
   visitLinks: [],
 });
+
+// O histórico é decrescente. Visita e venda do mesmo salvamento aparecem
+// como visita → venda, sem alterar a sequência persistida nem vendas anteriores.
+export function crmTimeline(activities, opportunityId) {
+  const events = activities
+    .filter((event) => event.opportunityId === opportunityId)
+    .sort((a, b) => b.sequence - a.sequence);
+  for (let index = 0; index < events.length - 1; index++) {
+    const visit = events[index];
+    const sale = events[index + 1];
+    if (
+      visit.type === "visit" &&
+      sale.type === "sale" &&
+      visit.sourceVisitId &&
+      visit.sourceVisitId === sale.sourceVisitId &&
+      visit.at === sale.at
+    ) {
+      [events[index], events[index + 1]] = [sale, visit];
+      index++;
+    }
+  }
+  return events;
+}
 const unique = (items) => [...new Set(items)];
 const closed = (item) => ["won", "lost"].includes(item.stage);
 const ensure = (condition, message, status = 400) => {

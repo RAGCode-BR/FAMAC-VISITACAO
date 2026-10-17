@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   CRM_STAGES,
   businessSales,
+  crmTimeline,
   emptyCrm,
   filterBusinessSales,
 } from "../lib/crm.mjs";
@@ -17,6 +18,7 @@ import {
   today,
 } from "../lib/domain.mjs";
 import { Badge, Empty, Field, Icon, Metric, Modal, Select } from "./ui.jsx";
+import Pagination from "./Pagination.jsx";
 import "../crm.css";
 
 const active = (item) => !["won", "lost"].includes(item.stage);
@@ -37,6 +39,10 @@ export default function Crm({
   const [mobileStage, setMobileStage] = useState("prospecting");
   const [dialog, setDialog] = useState(null);
   const [drop, setDrop] = useState("");
+  const [view, setView] = useState("board");
+  const [closedStage, setClosedStage] = useState("");
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [query, responsible, closedStage, view]);
   const filtered = crm.opportunities.filter(
     (item) =>
       (!responsible || item.responsibleId === responsible) &&
@@ -55,6 +61,24 @@ export default function Crm({
         ].join(" "),
       ).includes(normalize(query)),
   );
+  const archived = filtered
+    .filter(
+      (item) => !active(item) && (!closedStage || item.stage === closedStage),
+    )
+    .sort(
+      (a, b) =>
+        b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id),
+    );
+  const currentPage = Math.min(
+    page,
+    Math.max(1, Math.ceil(archived.length / 12)),
+  );
+  const showView = (next, stage = "") => {
+    setView(next);
+    setClosedStage(stage);
+    setReturns("");
+    setPage(1);
+  };
   const open = (
     item,
     type = "update",
@@ -133,6 +157,28 @@ export default function Crm({
         />
       </div>
       <section className="crm-workspace" aria-label="Quadro de oportunidades">
+        <div
+          className="crm-view-tabs"
+          role="group"
+          aria-label="Visualização do CRM"
+        >
+          <button
+            aria-pressed={view === "board"}
+            onClick={() => showView("board")}
+          >
+            <Icon name="kanban" size={17} /> Em andamento
+            <span>{crm.opportunities.filter(active).length}</span>
+          </button>
+          <button
+            aria-pressed={view === "closed"}
+            onClick={() => showView("closed")}
+          >
+            <Icon name="check" size={17} /> Encerradas
+            <span>
+              {crm.opportunities.filter((item) => !active(item)).length}
+            </span>
+          </button>
+        </div>
         <div className="crm-toolbar">
           <div className="search-input">
             <Icon name="search" size={17} />
@@ -155,213 +201,360 @@ export default function Crm({
               </option>
             ))}
           </Select>
-          <Select label="Próximo retorno" value={returns} onChange={setReturns}>
-            <option value="">Todos os retornos</option>
-            <option value="today">Para hoje</option>
-            <option value="overdue">Em atraso</option>
-          </Select>
-        </div>
-        <div className="crm-board-tip">
-          <span>
-            <Icon name="kanban" size={16} />
-            Uma oportunidade por obra. Todas as visitas no mesmo fluxo.
-          </span>
-          <small>
-            Abra um cartão para atualizar ou arraste entre as etapas.
-          </small>
-        </div>
-        <div
-          className="crm-mobile-tabs"
-          role="group"
-          aria-label="Etapas do CRM"
-        >
-          {Object.entries(CRM_STAGES).map(([id, label]) => (
-            <button
-              key={id}
-              className={mobileStage === id ? "active" : ""}
-              onClick={() => setMobileStage(id)}
+          {view === "closed" ? (
+            <Select
+              label="Resultado da negociação"
+              value={closedStage}
+              onChange={setClosedStage}
             >
-              {label}
-              <span>{filtered.filter((item) => item.stage === id).length}</span>
-            </button>
-          ))}
+              <option value="">Todos os resultados</option>
+              <option value="won">Venda realizada</option>
+              <option value="lost">Sem negócio</option>
+            </Select>
+          ) : (
+            <Select
+              label="Próximo retorno"
+              value={returns}
+              onChange={setReturns}
+            >
+              <option value="">Todos os retornos</option>
+              <option value="today">Para hoje</option>
+              <option value="overdue">Em atraso</option>
+            </Select>
+          )}
         </div>
-        <div className="crm-board">
-          {Object.entries(CRM_STAGES).map(([stage, label]) => {
-            const items = filtered
-              .filter((item) => item.stage === stage)
-              .sort(
-                (a, b) =>
-                  Number(overdue(b)) - Number(overdue(a)) ||
-                  (a.nextDate || "9999").localeCompare(b.nextDate || "9999") ||
-                  b.updatedAt.localeCompare(a.updatedAt),
-              );
-            return (
-              <section
-                key={stage}
-                className={`crm-column crm-${stage} ${mobileStage === stage ? "mobile-selected" : ""} ${drop === stage ? "drop-target" : ""}`}
-                aria-label={label}
-                onDragOver={(event) => {
-                  if (
-                    event.dataTransfer.types.includes("application/x-famac-crm")
-                  ) {
-                    event.preventDefault();
-                    setDrop(stage);
-                  }
-                }}
-                onDragLeave={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget))
-                    setDrop("");
-                }}
-                onDrop={(event) => dropped(event, stage)}
-              >
-                <header className="crm-column-heading">
+        {view === "board" ? (
+          <>
+            <div className="crm-board-tip">
+              <span>
+                <Icon name="kanban" size={16} />
+                Uma oportunidade por obra. Todas as visitas no mesmo fluxo.
+              </span>
+              <small>
+                Abra um cartão para atualizar ou arraste entre as etapas.
+              </small>
+            </div>
+            <div
+              className="crm-mobile-tabs"
+              role="group"
+              aria-label="Etapas do CRM"
+            >
+              {Object.entries(CRM_STAGES).map(([id, label]) => (
+                <button
+                  key={id}
+                  className={mobileStage === id ? "active" : ""}
+                  onClick={() => setMobileStage(id)}
+                >
+                  {label}
                   <span>
-                    <i />
-                    {label}
+                    {filtered.filter((item) => item.stage === id).length}
                   </span>
-                  <b>{items.length}</b>
-                </header>
-                <div className="crm-column-cards">
-                  {items.map((item) => (
-                    <article
-                      className="crm-card"
-                      key={item.id}
-                      draggable
-                      onDragStart={(event) =>
-                        event.dataTransfer.setData(
+                </button>
+              ))}
+            </div>
+            <div className="crm-board">
+              {Object.entries(CRM_STAGES).map(([stage, label]) => {
+                const items = filtered
+                  .filter((item) => item.stage === stage)
+                  .sort(
+                    (a, b) =>
+                      Number(overdue(b)) - Number(overdue(a)) ||
+                      (a.nextDate || "9999").localeCompare(
+                        b.nextDate || "9999",
+                      ) ||
+                      b.updatedAt.localeCompare(a.updatedAt),
+                  );
+                return (
+                  <section
+                    key={stage}
+                    className={`crm-column crm-${stage} ${mobileStage === stage ? "mobile-selected" : ""} ${drop === stage ? "drop-target" : ""}`}
+                    aria-label={label}
+                    onDragOver={(event) => {
+                      if (
+                        event.dataTransfer.types.includes(
                           "application/x-famac-crm",
-                          JSON.stringify({
-                            id: item.id,
-                            version: item.version,
-                          }),
                         )
+                      ) {
+                        event.preventDefault();
+                        setDrop(stage);
                       }
-                    >
-                      <div className="crm-card-top">
-                        <Badge
-                          tone={item.work.type === "Comercial" ? "blue" : ""}
-                        >
-                          {item.work.type}
-                        </Badge>
-                        {item.completedProducts.length > 0 && active(item) && (
-                          <span className="crm-partial">Venda parcial</span>
-                        )}
+                    }}
+                    onDragLeave={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget))
+                        setDrop("");
+                    }}
+                    onDrop={(event) => dropped(event, stage)}
+                  >
+                    <header className="crm-column-heading">
+                      <span>
+                        <i />
+                        {label}
+                      </span>
+                      <b>{items.length}</b>
+                    </header>
+                    <div className="crm-column-cards">
+                      {!active({ stage }) ? (
+                        <div className="crm-closed-summary">
+                          <Icon
+                            name={stage === "won" ? "check" : "kanban"}
+                            size={27}
+                          />
+                          <strong>
+                            {items.length}{" "}
+                            {stage === "won"
+                              ? "com venda realizada"
+                              : "sem negócio"}
+                          </strong>
+                          <p>
+                            Consulte os registros e o histórico na lista de
+                            encerradas.
+                          </p>
+                          <button
+                            className="button secondary"
+                            onClick={() => showView("closed", stage)}
+                          >
+                            {stage === "won"
+                              ? "Consultar vendas"
+                              : "Consultar encerradas"}
+                            <Icon name="arrow" size={15} />
+                          </button>
+                        </div>
+                      ) : (
+                        items.map((item) => (
+                          <article
+                            className="crm-card"
+                            key={item.id}
+                            draggable
+                            onDragStart={(event) =>
+                              event.dataTransfer.setData(
+                                "application/x-famac-crm",
+                                JSON.stringify({
+                                  id: item.id,
+                                  version: item.version,
+                                }),
+                              )
+                            }
+                          >
+                            <div className="crm-card-top">
+                              <Badge
+                                tone={
+                                  item.work.type === "Comercial" ? "blue" : ""
+                                }
+                              >
+                                {item.work.type}
+                              </Badge>
+                              {item.completedProducts.length > 0 &&
+                                active(item) && (
+                                  <span className="crm-partial">
+                                    Venda parcial
+                                  </span>
+                                )}
+                            </div>
+                            <button
+                              className="crm-card-title"
+                              onClick={() =>
+                                open(item, active(item) ? "update" : "details")
+                              }
+                            >
+                              {item.work.name}
+                            </button>
+                            <p className="crm-card-address">
+                              <Icon name="visit" size={14} />
+                              {item.work.neighborhood} · {item.work.city}
+                            </p>
+                            {(item.work.architectName ||
+                              item.work.contractorName) && (
+                              <p className="crm-card-contact">
+                                {item.work.architectName ||
+                                  item.work.contractorName}
+                              </p>
+                            )}
+                            <div className="crm-product-chips">
+                              {(active(item)
+                                ? item.pendingProducts
+                                : item.products
+                              )
+                                .slice(0, 3)
+                                .map((name) => (
+                                  <span key={name}>{name}</span>
+                                ))}
+                              {(active(item)
+                                ? item.pendingProducts
+                                : item.products
+                              ).length > 3 && (
+                                <span>
+                                  +
+                                  {(active(item)
+                                    ? item.pendingProducts
+                                    : item.products
+                                  ).length - 3}
+                                </span>
+                              )}
+                            </div>
+                            {item.nextAction && active(item) && (
+                              <div
+                                className={`crm-card-next ${overdue(item) ? "late" : ""}`}
+                              >
+                                <Icon name="clock" size={14} />
+                                <span>
+                                  {item.nextDate && (
+                                    <strong>
+                                      {overdue(item) ? "Em atraso · " : ""}
+                                      {dateLabel(item.nextDate)}
+                                    </strong>
+                                  )}
+                                  {item.nextAction}
+                                </span>
+                              </div>
+                            )}
+                            <div className="crm-card-owner">
+                              <span className="avatar">
+                                {
+                                  TEAM.find(
+                                    (row) => row.id === item.responsibleId,
+                                  )?.initials
+                                }
+                              </span>
+                              <span>
+                                {person(item.responsibleId)}
+                                <small>Responsável atual</small>
+                              </span>
+                              <small>
+                                {
+                                  crm.visitLinks.filter(
+                                    (link) => link.opportunityId === item.id,
+                                  ).length
+                                }{" "}
+                                visitas
+                              </small>
+                            </div>
+                            <footer>
+                              <button
+                                className="button text-button"
+                                aria-label={`Abrir oportunidade ${item.work.name}`}
+                                onClick={() =>
+                                  open(
+                                    item,
+                                    active(item) ? "update" : "details",
+                                  )
+                                }
+                              >
+                                Abrir oportunidade
+                                <Icon name="arrow" size={15} />
+                              </button>
+                              <button
+                                className="icon-button"
+                                aria-label={`Registrar visita em ${item.work.name}`}
+                                onClick={() => visit(item)}
+                              >
+                                <Icon name="plus" size={18} />
+                              </button>
+                            </footer>
+                          </article>
+                        ))
+                      )}
+                    </div>
+                    {!items.length && active({ stage }) && (
+                      <div className="crm-column-empty">
+                        <Icon
+                          name={stage === "won" ? "check" : "kanban"}
+                          size={25}
+                        />
+                        <p>
+                          {crm.opportunities.length
+                            ? "Nenhuma oportunidade nesta etapa"
+                            : "As oportunidades das visitas aparecerão aqui"}
+                        </p>
                       </div>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
+            {!filtered.length && !!crm.opportunities.length && (
+              <p className="crm-no-results">
+                Nenhuma oportunidade corresponde aos filtros.
+              </p>
+            )}
+          </>
+        ) : (
+          <div className="crm-archive">
+            <div className="crm-archive-heading">
+              <div>
+                <h2>Negociações encerradas</h2>
+                <p>
+                  Histórico preservado. Abra uma obra para consultar ou reabrir
+                  a negociação.
+                </p>
+              </div>
+              <Badge>{archived.length} registros</Badge>
+            </div>
+            <div className="crm-archive-list">
+              {archived
+                .slice((currentPage - 1) * 12, currentPage * 12)
+                .map((item) => (
+                  <article className="crm-archive-row" key={item.id}>
+                    <div className="crm-archive-work">
+                      <Badge tone={item.stage === "won" ? "success" : ""}>
+                        {CRM_STAGES[item.stage]}
+                      </Badge>
                       <button
                         className="crm-card-title"
-                        onClick={() =>
-                          open(item, active(item) ? "update" : "details")
-                        }
+                        onClick={() => open(item, "details")}
                       >
                         {item.work.name}
                       </button>
-                      <p className="crm-card-address">
-                        <Icon name="visit" size={14} />
+                      <p>
                         {item.work.neighborhood} · {item.work.city}
                       </p>
-                      {(item.work.architectName ||
-                        item.work.contractorName) && (
-                        <p className="crm-card-contact">
-                          {item.work.architectName || item.work.contractorName}
-                        </p>
-                      )}
-                      <div className="crm-product-chips">
-                        {(active(item) ? item.pendingProducts : item.products)
-                          .slice(0, 3)
-                          .map((name) => (
-                            <span key={name}>{name}</span>
-                          ))}
-                        {(active(item) ? item.pendingProducts : item.products)
-                          .length > 3 && (
-                          <span>
-                            +
-                            {(active(item)
-                              ? item.pendingProducts
-                              : item.products
-                            ).length - 3}
-                          </span>
-                        )}
-                      </div>
-                      {item.nextAction && active(item) && (
-                        <div
-                          className={`crm-card-next ${overdue(item) ? "late" : ""}`}
-                        >
-                          <Icon name="clock" size={14} />
-                          <span>
-                            {item.nextDate && (
-                              <strong>
-                                {overdue(item) ? "Em atraso · " : ""}
-                                {dateLabel(item.nextDate)}
-                              </strong>
-                            )}
-                            {item.nextAction}
-                          </span>
-                        </div>
-                      )}
-                      <div className="crm-card-owner">
-                        <span className="avatar">
-                          {
-                            TEAM.find((row) => row.id === item.responsibleId)
-                              ?.initials
-                          }
-                        </span>
-                        <span>
-                          {person(item.responsibleId)}
-                          <small>Responsável atual</small>
-                        </span>
-                        <small>
-                          {
-                            crm.visitLinks.filter(
-                              (link) => link.opportunityId === item.id,
-                            ).length
-                          }{" "}
-                          visitas
-                        </small>
-                      </div>
-                      <footer>
-                        <button
-                          className="button text-button"
-                          aria-label={`Abrir oportunidade ${item.work.name}`}
-                          onClick={() =>
-                            open(item, active(item) ? "update" : "details")
-                          }
-                        >
-                          Abrir oportunidade
-                          <Icon name="arrow" size={15} />
-                        </button>
-                        <button
-                          className="icon-button"
-                          aria-label={`Registrar visita em ${item.work.name}`}
-                          onClick={() => visit(item)}
-                        >
-                          <Icon name="plus" size={18} />
-                        </button>
-                      </footer>
-                    </article>
-                  ))}
-                </div>
-                {!items.length && (
-                  <div className="crm-column-empty">
-                    <Icon
-                      name={stage === "won" ? "check" : "kanban"}
-                      size={25}
-                    />
-                    <p>
-                      {crm.opportunities.length
-                        ? "Nenhuma oportunidade nesta etapa"
-                        : "As oportunidades das visitas aparecerão aqui"}
-                    </p>
-                  </div>
-                )}
-              </section>
-            );
-          })}
-        </div>
-        {!filtered.length && !!crm.opportunities.length && (
-          <p className="crm-no-results">
-            Nenhuma oportunidade corresponde aos filtros.
-          </p>
+                      <small>{item.products.join(" · ")}</small>
+                    </div>
+                    <div className="crm-archive-meta">
+                      <span>
+                        Responsável<strong>{person(item.responsibleId)}</strong>
+                      </span>
+                      <span>
+                        Última atualização
+                        <strong>
+                          {new Date(item.updatedAt).toLocaleDateString("pt-BR")}
+                        </strong>
+                      </span>
+                      <span>
+                        Total vendido
+                        <strong>
+                          {money(
+                            crm.sales
+                              .filter((sale) => sale.opportunityId === item.id)
+                              .reduce((total, sale) => total + sale.value, 0),
+                          )}
+                        </strong>
+                      </span>
+                    </div>
+                    <button
+                      className="button secondary"
+                      aria-label={`Abrir oportunidade ${item.work.name}`}
+                      onClick={() => open(item, "details")}
+                    >
+                      Ver histórico <Icon name="arrow" size={15} />
+                    </button>
+                  </article>
+                ))}
+            </div>
+            {!archived.length && (
+              <Empty
+                icon="check"
+                title="Nenhuma negociação encerrada"
+                description="As obras encerradas aparecerão aqui. Confira também os filtros selecionados."
+              />
+            )}
+            <Pagination
+              page={currentPage}
+              totalItems={archived.length}
+              pageSize={12}
+              onChange={setPage}
+              itemLabel="negociações encerradas"
+            />
+          </div>
         )}
       </section>
       {selected && (
@@ -409,9 +602,7 @@ function CrmDialog({
   const [error, setError] = useState("");
   const type = initial.type;
   const stale = version !== item.version;
-  const events = crm.activities
-    .filter((event) => event.opportunityId === item.id)
-    .sort((a, b) => b.sequence - a.sequence);
+  const events = crmTimeline(crm.activities, item.id);
   const titles = {
     update: "Próximo passo",
     sale: "Registrar venda",

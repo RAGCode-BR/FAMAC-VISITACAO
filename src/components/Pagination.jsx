@@ -33,7 +33,7 @@ export default function Pagination({
   const goToPage = (nextPage, event) => {
     if (nextPage === page || nextPage < 1 || nextPage > totalPages) return;
     onChange(nextPage);
-    const panel = event.currentTarget.closest(".panel");
+    const panel = event.currentTarget.closest(".panel, .crm-archive");
     window.requestAnimationFrame(() =>
       panel?.scrollIntoView({
         behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches

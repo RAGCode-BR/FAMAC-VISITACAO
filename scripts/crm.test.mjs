@@ -15,7 +15,66 @@ import {
   reconcileLocalCrm,
   recordCrmVisit,
   crmWorkKey,
+  crmTimeline,
 } from "../src/lib/crm.mjs";
+
+test("histórico mostra venda acima da visita do mesmo salvamento sem reordenar ações independentes", () => {
+  const events = [
+    {
+      id: "created",
+      opportunityId: "a",
+      sequence: 1,
+      type: "created",
+      at: "2026-10-16T20:00:00Z",
+    },
+    {
+      id: "sale",
+      opportunityId: "a",
+      sequence: 2,
+      type: "sale",
+      sourceVisitId: "visit1",
+      at: "2026-10-16T20:00:00Z",
+    },
+    {
+      id: "visit",
+      opportunityId: "a",
+      sequence: 3,
+      type: "visit",
+      sourceVisitId: "visit1",
+      at: "2026-10-16T20:00:00Z",
+    },
+    {
+      id: "note",
+      opportunityId: "a",
+      sequence: 4,
+      type: "note",
+      at: "2026-10-16T20:00:00Z",
+    },
+    {
+      id: "other",
+      opportunityId: "b",
+      sequence: 5,
+      type: "note",
+      at: "2026-10-16T20:00:00Z",
+    },
+  ];
+  const original = structuredClone(events);
+  assert.deepEqual(
+    crmTimeline(events, "a").map((event) => event.id),
+    ["note", "sale", "visit", "created"],
+  );
+  assert.deepEqual(events, original);
+  for (const different of [
+    { ...events[2], at: "2026-10-16T20:01:00Z" },
+    { ...events[2], sourceVisitId: "visit2" },
+    { ...events[2], sourceVisitId: undefined, linkedSaleId: "sale" },
+  ]) {
+    assert.deepEqual(
+      crmTimeline([events[1], different], "a").map((event) => event.id),
+      ["visit", "sale"],
+    );
+  }
+});
 
 test("obras sem número e S/N usam o nome para não unir obras diferentes na mesma rua", () => {
   const work = {

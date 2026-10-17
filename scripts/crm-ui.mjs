@@ -72,6 +72,19 @@ try {
       sold: index === 3 ? ["TOLDOS"] : [],
       saleValue: index === 3 ? 2000 : 0,
     });
+  for (let index = 1; index <= 15; index++)
+    data = recordVisit(data, {
+      ...newVisit("claudionor"),
+      workName: `Encerrada ${String(index).padStart(2, "0")}`,
+      street: "Rua das Palmeiras",
+      number: String(100 + index),
+      neighborhood: "Jardim",
+      city: "Sorriso",
+      state: "MT",
+      offered: ["TOLDOS"],
+      sold: ["TOLDOS"],
+      saleValue: 10,
+    });
   data = reconcileLocalCrm(data, null, true);
   const change = (name, input) => {
     const item = data.crm.opportunities.find((item) => item.work.name === name);
@@ -116,7 +129,33 @@ try {
   await page.locator(".visit-form").waitFor();
   await nav("CRM");
   assert.equal(await page.locator(".crm-column").count(), 5);
-  assert.equal(await page.locator(".crm-card").count(), 6);
+  assert.equal(await page.locator(".crm-card").count(), 4);
+  assert.equal(await page.locator(".crm-won .crm-card").count(), 0);
+  await page.getByRole("button", { name: /^Encerradas/ }).click();
+  assert.equal(await page.locator(".crm-archive-row").count(), 12);
+  await page
+    .getByRole("button", { name: "Próxima página", exact: true })
+    .click();
+  assert.equal(await page.locator(".crm-archive-row").count(), 5);
+  await page.getByLabel("Buscar oportunidades").fill(names[3]);
+  assert.equal(await page.locator(".crm-archive-row").count(), 1);
+  await open(names[3]);
+  assert.deepEqual(
+    await modal.locator(".crm-timeline article strong").allTextContents(),
+    ["Venda registrada", "Visita registrada", "Oportunidade aberta"],
+  );
+  await modal.getByRole("button", { name: "Fechar janela" }).click();
+  await page.getByLabel("Buscar oportunidades").fill("");
+  await page.getByLabel("Resultado da negociação").selectOption("lost");
+  assert.equal(await page.locator(".crm-archive-row").count(), 1);
+  await page
+    .getByLabel("Responsável pela oportunidade")
+    .selectOption("charles");
+  await page
+    .getByText("Nenhuma negociação encerrada", { exact: true })
+    .waitFor();
+  await page.getByLabel("Responsável pela oportunidade").selectOption("");
+  await page.getByRole("button", { name: /^Em andamento/ }).click();
   await fits();
   await page.screenshot({
     path: "test-results/crm-desktop.png",
@@ -167,13 +206,12 @@ try {
   await modal.getByRole("checkbox", { name: "GESSO", exact: true }).check();
   await modal.getByLabel("Valor deste fechamento (R$)").fill("500");
   await submit("Confirmar venda");
-  assert.equal(
-    await page
-      .locator(".crm-won .crm-card")
-      .filter({ hasText: names[0] })
-      .count(),
-    1,
-  );
+  assert.equal(await horizon.count(), 0);
+  await page
+    .getByRole("button", { name: "Consultar vendas", exact: true })
+    .click();
+  await page.getByLabel("Buscar oportunidades").fill(names[0]);
+  assert.equal(await page.locator(".crm-archive-row").count(), 1);
   await open(names[0]);
   await modal
     .getByRole("button", { name: "Reabrir negociação", exact: true })
@@ -183,6 +221,9 @@ try {
     .getByLabel("Motivo", { exact: true })
     .fill("Novo ambiente da mesma obra");
   await submit();
+  assert.equal(await page.locator(".crm-archive-row").count(), 0);
+  await page.getByRole("button", { name: /^Em andamento/ }).click();
+  await page.getByLabel("Buscar oportunidades").fill("");
   await open(names[0]);
   await modal
     .getByRole("button", { name: "Registrar visita", exact: true })
@@ -202,7 +243,7 @@ try {
     .getByText("Visita registrada com sucesso.", { exact: true })
     .waitFor();
   await nav("CRM");
-  assert.equal(await page.locator(".crm-card").count(), 6);
+  assert.equal(await page.locator(".crm-card").count(), 4);
   await open(names[0]);
   await modal
     .getByLabel("Observação para a equipe")
@@ -274,6 +315,23 @@ try {
       animations: "disabled",
     });
     await modal.getByRole("button", { name: "Cancelar", exact: true }).click();
+    await page.getByRole("button", { name: /^Encerradas/ }).click();
+    await fits();
+    assert.equal(await page.locator(".crm-archive-row").count(), 12);
+    await page
+      .getByRole("button", { name: "Próxima página", exact: true })
+      .click();
+    assert.equal(await page.locator(".crm-archive-row").count(), 5);
+    await page.getByLabel("Buscar oportunidades").fill(names[3]);
+    await open(names[3]);
+    await fits();
+    await modal.getByRole("button", { name: "Fechar janela" }).click();
+    await page.getByLabel("Buscar oportunidades").fill("");
+    await page.screenshot({
+      path: `test-results/crm-archive-${width}.png`,
+      fullPage: true,
+    });
+    await page.getByRole("button", { name: /^Em andamento/ }).click();
   }
   await nav("Relatórios");
   await page
@@ -293,7 +351,7 @@ try {
   assert.equal((await download).suggestedFilename(), "famac-fechamentos.csv");
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: kanban, filtros, responsáveis, venda parcial por Charles e conclusão por Celso, reabertura, visita sem duplicar obra, conflito preservando rascunho, financeiro e CSV; desktop e celular",
+    "PASS: kanban, encerradas paginadas e filtradas, ordem venda/visita, responsáveis, venda parcial, reabertura, visita sem duplicar obra, conflito preservando rascunho, financeiro e CSV; desktop e celular",
   );
 } catch (error) {
   await page
