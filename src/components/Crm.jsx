@@ -696,6 +696,7 @@ function CrmDialog({
             <button
               type="button"
               className={`button ${type === "update" ? "primary" : "secondary"}`}
+              aria-pressed={type === "update"}
               disabled={busy}
               onClick={() => onMode("update")}
             >
@@ -704,6 +705,7 @@ function CrmDialog({
             <button
               type="button"
               className={`button ${type === "sale" ? "primary" : "secondary"}`}
+              aria-pressed={type === "sale"}
               disabled={busy || !item.pendingProducts.length}
               onClick={() => onMode("sale")}
             >
@@ -711,7 +713,8 @@ function CrmDialog({
             </button>
             <button
               type="button"
-              className="button secondary"
+              className={`button ${type === "note" ? "primary" : "secondary"}`}
+              aria-pressed={type === "note"}
               disabled={busy}
               onClick={() => onMode("note")}
             >
@@ -719,7 +722,8 @@ function CrmDialog({
             </button>
             <button
               type="button"
-              className="button text-button delete-action"
+              className={`button ${type === "lose" ? "primary" : "secondary"}`}
+              aria-pressed={type === "lose"}
               disabled={busy}
               onClick={() => onMode("lose")}
             >
@@ -728,7 +732,8 @@ function CrmDialog({
             {item.completedProducts.length > 0 && (
               <button
                 type="button"
-                className="button text-button"
+                className={`button ${type === "complete" ? "primary" : "secondary"}`}
+                aria-pressed={type === "complete"}
                 disabled={busy}
                 onClick={() => onMode("complete")}
               >
@@ -740,7 +745,8 @@ function CrmDialog({
           <>
             <button
               type="button"
-              className="button secondary"
+              className={`button ${type === "reopen" ? "primary" : "secondary"}`}
+              aria-pressed={type === "reopen"}
               disabled={busy}
               onClick={() => onMode("reopen")}
             >
@@ -748,7 +754,8 @@ function CrmDialog({
             </button>
             <button
               type="button"
-              className="button secondary"
+              className={`button ${type === "note" ? "primary" : "secondary"}`}
+              aria-pressed={type === "note"}
               disabled={busy}
               onClick={() => onMode("note")}
             >
