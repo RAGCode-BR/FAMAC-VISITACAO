@@ -389,6 +389,7 @@ try {
     "Nova visita",
     "Visitas realizadas",
     "Programação",
+    "CRM",
     "Obras",
     "Contatos",
     "Relatórios",
@@ -430,7 +431,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: 9 telas em celular de 360px, menu acessível, nenhuma chamada ao banco antigo, nenhum erro React",
+    "PASS: 10 telas em celular de 360px, menu acessível, nenhuma chamada ao banco antigo, nenhum erro React",
   );
 } catch (error) {
   await page.screenshot({

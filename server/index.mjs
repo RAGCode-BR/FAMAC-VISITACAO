@@ -19,6 +19,7 @@ import {
   validateRecord,
 } from "./policy.mjs";
 import { connectionString } from "./connection.mjs";
+import { installCrmRoutes, readCrm, syncVisitCrm } from "./crm-store.mjs";
 import {
   productKey,
   productNames,
@@ -108,6 +109,7 @@ async function readState(db, member, since) {
       ownerId: row.owner_id,
     }));
   }
+  state.crm = await readCrm(db);
   return state;
 }
 async function snapshot(member, since) {
@@ -180,6 +182,8 @@ app.put("/state", async (c) => {
         409,
       );
     const before = await readState(db, member);
+    if (state.crm !== undefined && !isDeepStrictEqual(state.crm, before.crm))
+      fail("O CRM deve ser atualizado pelas ações da oportunidade.", 403);
     if (state.products === undefined) state.products = before.products;
     for (const kind of collections) {
       const incoming = new Map(state[kind].map((row) => [row.id, row]));
@@ -263,7 +267,13 @@ app.put("/state", async (c) => {
           fail("Não é permitido transferir a autoria.", 403);
         if ((kind === "visits" || kind === "plans") && record.userId !== owner)
           fail("O colaborador do registro não corresponde à autoria.", 403);
-        validateRecord(kind, record, productNames(state));
+        validateRecord(kind, record, [
+          ...productNames(state),
+          ...(kind === "visits"
+            ? before.crm.sales.find((sale) => sale.id === record.crmSaleId)
+                ?.products || []
+            : []),
+        ]);
         const payload = { ...record };
         delete payload.ownerId;
         for (const [key, role] of [
@@ -279,6 +289,10 @@ app.put("/state", async (c) => {
             fail("Contato indisponível para esta obra.", 403);
           if (contact.rows[0].payload.deleted) {
             let inherited = existing.rows[0]?.payload[key];
+            if (!inherited && record.crmOpportunityId)
+              inherited = before.crm.opportunities.find(
+                (item) => item.id === record.crmOpportunityId,
+              )?.work[key];
             if (kind === "visits") {
               const work = await db.query(
                 "SELECT payload,owner_id FROM famac.works WHERE id=$1",
@@ -332,6 +346,7 @@ app.put("/state", async (c) => {
             `INSERT INTO famac.${kind}(id,owner_id,payload) VALUES ($1,$2,$3) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,updated_at=now()`,
             [record.id, owner, payload],
           );
+        if (kind === "visits") await syncVisitCrm(db, payload, owner, member);
       }
     }
     await db.query(
@@ -360,6 +375,7 @@ app.put("/state", async (c) => {
     db.release();
   }
 });
+installCrmRoutes(app, pool, readState);
 const isProductPhotoUsed = (row) =>
   !row.product?.deleted &&
   (row.product?.photos || []).some((photo) => photo.id === row.id);
@@ -522,6 +538,17 @@ app.delete("/photos/:id", async (c) => {
 });
 app.onError((error, c) => {
   if (error.status) return c.json({ error: error.message }, error.status);
+  if (
+    error.code === "23505" &&
+    error.constraint === "crm_opportunities_work_key_key"
+  )
+    return c.json(
+      {
+        error:
+          "Esta obra já possui oportunidade no CRM. Atualize a tela e vincule ao cartão existente.",
+      },
+      409,
+    );
   if (error.code === "23505" && error.constraint === "products_name_key_key")
     return c.json({ error: "Já existe um produto com esse nome." }, 409);
   if (error instanceof SyntaxError || error instanceof TypeError)

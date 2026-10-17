@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { normalize, uid } from "../lib/domain.mjs";
 
 const paths = {
+  kanban:
+    "M3 4h18v16H3z M9 4v16 M15 4v16 M5 8h2 M11 8h2 M17 8h2 M5 12h2 M11 12h2",
   grid: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
   plus: "M12 5v14 M5 12h14",
   visit:

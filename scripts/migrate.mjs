@@ -1,6 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import pg from "pg";
 import { connectionString } from "../server/connection.mjs";
+import { backfillCrm } from "../server/crm-store.mjs";
 
 if (!process.env.DATABASE_URL_UNPOOLED)
   throw new Error("DATABASE_URL_UNPOOLED não configurada.");
@@ -30,6 +31,7 @@ try {
     ]);
     console.log(`PASS: migração ${name}`);
   }
+  await backfillCrm(client);
   await client.query("COMMIT");
 } catch (error) {
   await client.query("ROLLBACK");

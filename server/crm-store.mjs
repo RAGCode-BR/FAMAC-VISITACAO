@@ -1,0 +1,170 @@
+import { isDeepStrictEqual } from "node:util";
+import { applyCrmAction, emptyCrm, recordCrmVisit } from "../src/lib/crm.mjs";
+import { person, productNames } from "../src/lib/domain.mjs";
+import { validId, fail, requireOwner } from "./policy.mjs";
+
+export async function readCrm(db) {
+  const crm = emptyCrm();
+  for (const [kind, table] of [
+    ["opportunities", "crm_opportunities"],
+    ["activities", "crm_activities"],
+    ["sales", "crm_sales"],
+    ["visitLinks", "crm_visit_links"],
+  ]) {
+    crm[kind] = (
+      await db.query(
+        `SELECT payload FROM famac.${table} ORDER BY payload->>'id',payload->>'visitId'`,
+      )
+    ).rows.map((row) => row.payload);
+  }
+  crm.opportunities.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  crm.activities.sort((a, b) => b.at.localeCompare(a.at));
+  return crm;
+}
+async function persistCrm(db, before, after) {
+  for (const row of after.opportunities) {
+    if (
+      isDeepStrictEqual(
+        before.opportunities.find((item) => item.id === row.id),
+        row,
+      )
+    )
+      continue;
+    await db.query(
+      "INSERT INTO famac.crm_opportunities(id,work_key,payload) VALUES ($1,$2,$3) ON CONFLICT(id) DO UPDATE SET work_key=excluded.work_key,payload=excluded.payload,updated_at=now()",
+      [row.id, row.workKey, row],
+    );
+  }
+  for (const row of after.activities) {
+    if (before.activities.some((item) => item.id === row.id)) continue;
+    await db.query(
+      "INSERT INTO famac.crm_activities(id,opportunity_id,payload) VALUES ($1,$2,$3)",
+      [row.id, row.opportunityId, row],
+    );
+  }
+  for (const row of after.sales) {
+    if (
+      isDeepStrictEqual(
+        before.sales.find((item) => item.id === row.id),
+        row,
+      )
+    )
+      continue;
+    await db.query(
+      "INSERT INTO famac.crm_sales(id,opportunity_id,source_visit_id,payload) VALUES ($1,$2,$3,$4) ON CONFLICT(id) DO UPDATE SET source_visit_id=excluded.source_visit_id,payload=excluded.payload",
+      [row.id, row.opportunityId, row.sourceVisitId, row],
+    );
+  }
+  for (const row of after.visitLinks) {
+    if (before.visitLinks.some((item) => item.visitId === row.visitId))
+      continue;
+    await db.query(
+      "INSERT INTO famac.crm_visit_links(visit_id,opportunity_id,payload) VALUES ($1,$2,$3)",
+      [row.visitId, row.opportunityId, row],
+    );
+  }
+}
+export async function syncVisitCrm(
+  db,
+  visit,
+  owner,
+  member,
+  historical = false,
+) {
+  const work = (
+    await db.query(
+      "SELECT payload FROM famac.works WHERE id=$1 AND owner_id=$2",
+      [visit.workId, owner],
+    )
+  ).rows[0]?.payload;
+  if (!work) fail("Obra indisponível para esta visita.", 403);
+  const before = await readCrm(db);
+  const actor = historical
+    ? { name: person(owner), teamId: owner }
+    : { ...member, teamId: member.teamId || owner };
+  const result = recordCrmVisit(before, visit, work, actor, { historical });
+  await persistCrm(db, before, result.crm);
+  if (result.opportunityId && work.crmOpportunityId !== result.opportunityId)
+    await db.query(
+      "UPDATE famac.works SET payload=payload || jsonb_build_object('crmOpportunityId',$2::text),updated_at=now() WHERE id=$1",
+      [work.id, result.opportunityId],
+    );
+  return result.opportunityId;
+}
+export async function backfillCrm(db) {
+  const exists = await db.query(
+    "SELECT to_regclass('famac.crm_opportunities') AS name",
+  );
+  if (!exists.rows[0].name) return;
+  await db.query(
+    "SELECT value FROM famac.revision WHERE singleton=true FOR UPDATE",
+  );
+  const result = await db.query(
+    "SELECT v.payload,v.owner_id FROM famac.visits v WHERE NOT EXISTS (SELECT 1 FROM famac.crm_visit_links l WHERE l.visit_id=v.id) AND COALESCE(v.payload->>'crmEnabled','')<>'false' ORDER BY v.visit_date,v.updated_at,v.id",
+  );
+  let integrated = 0;
+  for (const row of result.rows)
+    if (await syncVisitCrm(db, row.payload, row.owner_id, {}, true))
+      integrated++;
+  if (integrated) {
+    await db.query(
+      "UPDATE famac.revision SET value=value+1 WHERE singleton=true",
+    );
+    console.log(
+      `PASS: ${integrated} visitas integradas ao CRM sem alterar seu histórico`,
+    );
+  }
+}
+
+export function installCrmRoutes(app, pool, readState) {
+  app.post("/crm/:id/actions", async (c) => {
+    const member = c.get("member");
+    const body = await c.req.json();
+    const opportunityId = c.req.param("id");
+    if (!validId(opportunityId) || !validId(body.operationId))
+      fail("Operação do CRM inválida.");
+    requireOwner(member, body.actorTeamId);
+    const db = await pool.connect();
+    try {
+      await db.query("BEGIN");
+      await db.query(
+        "SELECT value FROM famac.revision WHERE singleton=true FOR UPDATE",
+      );
+      const repeated = await db.query(
+        "SELECT auth_id FROM famac.operations WHERE id=$1",
+        [body.operationId],
+      );
+      if (repeated.rowCount) {
+        if (repeated.rows[0].auth_id !== member.authId)
+          fail("Operação inválida.", 403);
+      } else {
+        const before = await readCrm(db);
+        const state = await readState(db, member);
+        const actor = { ...member, teamId: member.teamId || body.actorTeamId };
+        const after = applyCrmAction(
+          before,
+          opportunityId,
+          body.action || {},
+          actor,
+          productNames(state),
+        );
+        await persistCrm(db, before, after);
+        await db.query(
+          "UPDATE famac.revision SET value=value+1 WHERE singleton=true",
+        );
+        await db.query(
+          "INSERT INTO famac.operations(id,auth_id) VALUES ($1,$2)",
+          [body.operationId, member.authId],
+        );
+      }
+      const state = await readState(db, member);
+      await db.query("COMMIT");
+      return c.json(state);
+    } catch (error) {
+      await db.query("ROLLBACK");
+      throw error;
+    } finally {
+      db.release();
+    }
+  });
+}

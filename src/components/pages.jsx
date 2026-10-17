@@ -22,6 +22,7 @@ import {
 } from "../lib/domain.mjs";
 import Pagination from "./Pagination.jsx";
 import VisitPhoto from "./VisitPhoto.jsx";
+import { CrmSalesReport } from "./Crm.jsx";
 import {
   ProductGallery,
   ProductImage,
@@ -1169,6 +1170,20 @@ export function Schedule({ data, userId, save, onVisit, canAssign = true }) {
         (!status || item.status === status),
     )
     .sort((a, b) => a.date.localeCompare(b.date));
+  const isCrmReturn = (item) =>
+    item.responsibleId === userId &&
+    item.nextDate &&
+    !["won", "lost"].includes(item.stage) &&
+    inPeriod(item.nextDate) &&
+    (!user || user === userId) &&
+    (!status || status === "planned") &&
+    !plans.some(
+      (plan) =>
+        plan.status === "planned" &&
+        plan.date === item.nextDate &&
+        data.works.find((work) => work.id === plan.workId)?.crmOpportunityId ===
+          item.id,
+    );
   return (
     <>
       <div className="directory-intro">
@@ -1307,6 +1322,44 @@ export function Schedule({ data, userId, save, onVisit, canAssign = true }) {
           />
         )}
       </section>
+      {!!data.crm?.opportunities.some(isCrmReturn) && (
+        <section className="panel crm-schedule-returns">
+          <div className="panel-heading">
+            <div>
+              <h2>Retornos do CRM</h2>
+              <p>
+                Próximas ações atribuídas a {person(userId)}, no período
+                selecionado.
+              </p>
+            </div>
+            <Icon name="kanban" />
+          </div>
+          <div className="schedule-list">
+            {data.crm.opportunities.filter(isCrmReturn).map((item) => (
+              <article className="schedule-item" key={item.id}>
+                <span className="date-tile">
+                  <strong>{item.nextDate.slice(8)}</strong>
+                  <small>{item.nextDate.slice(5, 7)}</small>
+                </span>
+                <div className="schedule-info">
+                  <strong>{item.work.name}</strong>
+                  <p>
+                    {item.work.neighborhood} · {item.nextAction}
+                  </p>
+                </div>
+                <Badge tone="blue">CRM</Badge>
+                <button
+                  className="button secondary small"
+                  onClick={() => onVisit({ crmOpportunityId: item.id, userId })}
+                >
+                  Registrar visita
+                  <Icon name="arrow" size={15} />
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
       {adding && (
         <PlanForm
           data={data}
@@ -1384,7 +1437,12 @@ export function Reports({ data, onDetail, team = TEAM }) {
     : team;
   const indicators = teamIndicators(visits, visibleTeam);
   const neighborhoods = [
-    ...new Set(data.visits.map((item) => item.neighborhood)),
+    ...new Set([
+      ...data.visits.map((item) => item.neighborhood),
+      ...(data.crm?.sales || [])
+        .filter((sale) => team.some((user) => user.id === sale.sellerTeamId))
+        .map((sale) => sale.work.neighborhood),
+    ]),
   ].sort((a, b) => a.localeCompare(b, "pt-BR"));
   const contacts = (role) =>
     data.contacts
@@ -1544,11 +1602,12 @@ export function Reports({ data, onDetail, team = TEAM }) {
             onChange={set("product")}
           >
             <option value="">Todos os produtos</option>
-            {summarize(data.visits, productNames(data)).products.map(
-              ({ name }) => (
-                <option key={name}>{name}</option>
-              ),
-            )}
+            {summarize(data.visits, [
+              ...productNames(data),
+              ...(data.crm?.sales || []).flatMap((sale) => sale.products),
+            ]).products.map(({ name }) => (
+              <option key={name}>{name}</option>
+            ))}
           </Select>
           <Select
             label="Resultado do produto"
@@ -1625,6 +1684,7 @@ export function Reports({ data, onDetail, team = TEAM }) {
         />
       </div>
       <ReportOverview visits={visits} stats={stats} filters={filters} />
+      <CrmSalesReport data={data} filters={filters} team={team} />
       <div className="report-charts">
         <section className="panel">
           <div className="panel-heading">

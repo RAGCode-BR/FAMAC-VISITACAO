@@ -6,6 +6,7 @@ import { isSharedContact } from "./lib/contacts.mjs";
 import { Badge, Icon, Modal } from "./components/ui.jsx";
 import VisitForm from "./components/VisitForm.jsx";
 import AuthGate, { PasswordForm } from "./components/AuthGate.jsx";
+import Crm from "./components/Crm.jsx";
 import {
   Catalog,
   Contacts,
@@ -25,6 +26,7 @@ const NAV = [
   ["overview", "grid", "Visão geral"],
   ["new", "plus", "Nova visita"],
   ["visits", "visit", "Visitas realizadas"],
+  ["crm", "kanban", "CRM"],
   ["schedule", "calendar", "Programação"],
   ["works", "building", "Obras"],
   ["contacts", "users", "Contatos"],
@@ -33,6 +35,11 @@ const NAV = [
   ["team", "users", "Colaboradores"],
 ];
 const PAGE = {
+  crm: [
+    "CRM COMPARTILHADO",
+    "Uma equipe. Oportunidades em movimento.",
+    "Da primeira visita ao fechamento, cada próximo passo tem seu lugar.",
+  ],
   new: [
     "NOVA VISITA",
     "Cada visita, uma oportunidade.",
@@ -239,13 +246,12 @@ function App({ account, onLogout }) {
       previous?.focus();
     };
   }, [navOpen]);
-  const save = useCallback(async (updater, message) => {
+  const persist = useCallback(async (operation, message) => {
     if (saving.current)
       throw new Error("Aguarde o registro anterior terminar de salvar.");
     saving.current = true;
     try {
-      const next = updater(dataRef.current);
-      const persisted = await repository.save(next);
+      const persisted = await operation(dataRef.current);
       dataRef.current = persisted;
       setData(persisted);
       setNotice(message);
@@ -261,6 +267,19 @@ function App({ account, onLogout }) {
       saving.current = false;
     }
   }, []);
+  const save = useCallback(
+    (updater, message) =>
+      persist((current) => repository.save(updater(current)), message),
+    [persist],
+  );
+  const crmAction = useCallback(
+    (id, action) =>
+      persist(
+        () => repository.crmAction(id, action),
+        "Oportunidade atualizada.",
+      ),
+    [persist],
+  );
   const navigate = (next) => {
     setPage(next);
     setNavOpen(false);
@@ -521,6 +540,18 @@ function App({ account, onLogout }) {
           )}
           {page === "works" && (
             <Works data={operationalData} save={save} onVisit={startVisit} />
+          )}
+          {page === "crm" && (
+            <Crm
+              data={data}
+              actorId={userId}
+              account={account}
+              onAction={crmAction}
+              onVisit={(opportunity) =>
+                startVisit({ crmOpportunityId: opportunity.id, userId })
+              }
+              onNew={() => navigate("new")}
+            />
           )}
           {page === "contacts" && (
             <Contacts data={operationalData} save={save} onDetail={setDetail} />

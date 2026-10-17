@@ -25,7 +25,29 @@ export default function VisitForm({
 }) {
   const initial = () => {
     const base = newVisit(userId);
-    const work = data.works.find((item) => item.id === plan?.workId);
+    const opportunity = data.crm?.opportunities.find(
+      (item) => item.id === plan?.crmOpportunityId,
+    );
+    const work = data.works.find(
+      (item) =>
+        item.id === plan?.workId ||
+        (opportunity &&
+          (item.crmOpportunityId === opportunity.id ||
+            item.id === opportunity.primaryWorkId)),
+    );
+    if (opportunity)
+      return {
+        ...base,
+        ...(work || {}),
+        ...opportunity.work,
+        workId: work?.id || "",
+        workName: opportunity.work.name,
+        userId,
+        crmOpportunityId: opportunity.id,
+        crmEnabled: true,
+        contractorQuery: opportunity.work.contractorName,
+        architectQuery: opportunity.work.architectName,
+      };
     return work
       ? {
           ...base,
@@ -34,6 +56,7 @@ export default function VisitForm({
           workName: work.name,
           planId: plan.id,
           userId: plan.userId,
+          crmEnabled: true,
           contractorQuery:
             data.contacts.find((item) => item.id === work.contractorId)?.name ||
             "",
@@ -84,6 +107,8 @@ export default function VisitForm({
             "architectId",
             "contractorQuery",
             "architectQuery",
+            "crmOpportunityId",
+            "crmSaleId",
           ].map((key) => [key, empty[key] || ""]),
         ),
       );
@@ -93,6 +118,9 @@ export default function VisitForm({
       ...work,
       workId: work.id,
       workName: work.name,
+      crmOpportunityId: work.crmOpportunityId || "",
+      crmSaleId: "",
+      crmEnabled: true,
       contractorQuery:
         data.contacts.find((item) => item.id === work.contractorId)?.name || "",
       architectQuery:
@@ -155,6 +183,15 @@ export default function VisitForm({
       setBusy(false);
     }
   };
+  const crmOpportunity = data.crm?.opportunities.find(
+    (item) => item.id === form.crmOpportunityId,
+  );
+  const linkableSales = (data.crm?.sales || []).filter(
+    (sale) =>
+      sale.opportunityId === form.crmOpportunityId &&
+      !sale.sourceVisitId &&
+      sale.sellerTeamId === form.userId,
+  );
   return (
     <div className="visit-layout">
       <form className="visit-form" onSubmit={submit}>
@@ -350,6 +387,7 @@ export default function VisitForm({
                   <label className="product-choice">
                     <input
                       type="checkbox"
+                      disabled={!!form.crmSaleId}
                       checked={selected}
                       onChange={(event) =>
                         offered(product, event.target.checked)
@@ -376,6 +414,7 @@ export default function VisitForm({
                     <label className="sold-choice">
                       <input
                         type="checkbox"
+                        disabled={!!form.crmSaleId}
                         checked={sold}
                         aria-label={`Vendeu ${product}`}
                         onChange={(event) =>
@@ -402,8 +441,16 @@ export default function VisitForm({
           <div className="fields two">
             <Select
               label="Tipo de visita"
+              disabled={!!form.crmSaleId}
               value={form.sold.length ? "closing" : form.stage}
-              onChange={(stage) => update({ stage })}
+              onChange={(stage) =>
+                update({
+                  stage,
+                  crmEnabled: form.crmOpportunityId
+                    ? true
+                    : stage !== "relationship",
+                })
+              }
             >
               {Object.entries(STAGES).map(([id, name]) => (
                 <option key={id} value={id}>
@@ -413,6 +460,7 @@ export default function VisitForm({
             </Select>
             <Field
               label="Valor total vendido (R$)"
+              disabled={!!form.crmSaleId}
               type="number"
               min="0"
               step="0.01"
@@ -431,6 +479,104 @@ export default function VisitForm({
               placeholder="Interesses, necessidades e detalhes que ajudam no próximo contato…"
             />
           </Field>
+          <div className="visit-crm-choice">
+            <label>
+              <input
+                type="checkbox"
+                checked={form.crmEnabled}
+                disabled={!!form.crmOpportunityId}
+                onChange={(event) =>
+                  update({ crmEnabled: event.target.checked })
+                }
+              />
+              Acompanhar esta obra no CRM
+            </label>
+            <small>
+              Compartilha com a equipe os contatos da obra, o endereço e os
+              produtos. Fotos e anotações da visita continuam no seu histórico.
+            </small>
+            {form.crmEnabled && (
+              <Select
+                label="Oportunidade da equipe"
+                value={form.crmOpportunityId}
+                onChange={(id) => {
+                  const item = data.crm?.opportunities.find(
+                    (row) => row.id === id,
+                  );
+                  const own = data.works.find(
+                    (row) =>
+                      row.crmOpportunityId === id ||
+                      row.id === item?.primaryWorkId,
+                  );
+                  update(
+                    item
+                      ? {
+                          ...item.work,
+                          workName: item.work.name,
+                          workId: own?.id || "",
+                          crmOpportunityId: id,
+                          crmSaleId: "",
+                          contractorQuery: item.work.contractorName,
+                          architectQuery: item.work.architectName,
+                        }
+                      : { crmOpportunityId: "", crmSaleId: "" },
+                  );
+                }}
+              >
+                <option value="">
+                  Criar ou localizar pela obra e endereço
+                </option>
+                {(data.crm?.opportunities || []).map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.work.name} · {item.work.neighborhood} ·{" "}
+                    {item.work.city}
+                  </option>
+                ))}
+              </Select>
+            )}
+            {crmOpportunity && (
+              <small>
+                Vinculada a {crmOpportunity.work.name}. Esta visita atualiza a
+                oportunidade existente.
+              </small>
+            )}
+            {!!linkableSales.length && (
+              <Select
+                label="Vincular venda já registrada"
+                value={form.crmSaleId}
+                onChange={(id) => {
+                  const sale = linkableSales.find((item) => item.id === id);
+                  update(
+                    sale
+                      ? {
+                          crmSaleId: id,
+                          sold: [...sale.products],
+                          offered: [
+                            ...new Set([...form.offered, ...sale.products]),
+                          ],
+                          saleValue: String(sale.value),
+                          stage: "closing",
+                        }
+                      : { crmSaleId: "" },
+                  );
+                }}
+              >
+                <option value="">Nenhum fechamento vinculado</option>
+                {linkableSales.map((sale) => (
+                  <option key={sale.id} value={sale.id}>
+                    {dateLabel(sale.date)} · {sale.products.join(", ")} ·{" "}
+                    {money(sale.value)}
+                  </option>
+                ))}
+              </Select>
+            )}
+            {form.crmSaleId && (
+              <small>
+                Este fechamento será vinculado à visita e não será contado
+                novamente. Produtos: {form.sold.join(", ")}.
+              </small>
+            )}
+          </div>
         </section>
         <section className="panel form-section">
           <div className="section-heading">

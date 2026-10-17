@@ -10,6 +10,7 @@ import {
 } from "../src/lib/domain.mjs";
 import pg from "pg";
 import { connectionString } from "../server/connection.mjs";
+import { runCrmNeon } from "./crm-neon-flow.mjs";
 
 if (!process.env.NEON_BRANCH?.startsWith("famac-e2e-"))
   throw new Error(
@@ -34,7 +35,7 @@ await reset.connect();
 try {
   await reset.query("BEGIN");
   await reset.query(
-    "TRUNCATE famac.product_photos, famac.products, famac.photos, famac.operations, famac.plans, famac.visits, famac.works, famac.contacts",
+    "TRUNCATE famac.crm_activities,famac.crm_sales,famac.crm_visit_links,famac.crm_opportunities,famac.product_photos, famac.products, famac.photos, famac.operations, famac.plans, famac.visits, famac.works, famac.contacts",
   );
   await reset.query("UPDATE famac.revision SET value=0 WHERE singleton=true");
   await reset.query(
@@ -924,7 +925,11 @@ try {
           ...state,
           works: [
             ...state.works,
-            { ...state.works[0], id: crypto.randomUUID() },
+            {
+              ...state.works[0],
+              id: crypto.randomUUID(),
+              crmOpportunityId: "",
+            },
           ],
         }),
         "claudionor",
@@ -988,6 +993,14 @@ try {
     path: "test-results/neon-mobile.png",
     fullPage: true,
   });
+  await runCrmNeon({
+    clau: afterChange.page,
+    charles: recovered.page,
+    celso: celso.page,
+    call,
+    navigate,
+    base,
+  });
   assert.deepEqual(errors, []);
   await writeFile(
     "test-results/neon-result.json",
@@ -995,7 +1008,8 @@ try {
       {
         branch: process.env.NEON_BRANCH,
         passed: true,
-        visits: 3,
+        visits: 5,
+        sharedCrm: true,
         privatePhoto: true,
         ownRecordsOnly: true,
       },

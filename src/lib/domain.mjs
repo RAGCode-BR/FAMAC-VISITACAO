@@ -141,6 +141,9 @@ export const newVisit = (userId) => ({
   scheduleNext: false,
   nextDate: "",
   photos: [],
+  crmEnabled: true,
+  crmOpportunityId: "",
+  crmSaleId: "",
 });
 
 export function validateVisit(visit, allowedProducts = PRODUCTS) {
@@ -202,15 +205,23 @@ export function recordVisit(
   draft,
   { visitId = uid(), workId = uid(), planId = uid() } = {},
 ) {
-  validateVisit(draft, productNames(data));
+  validateVisit(draft, [
+    ...productNames(data),
+    ...(data.crm?.sales.find((sale) => sale.id === draft.crmSaleId)?.products ||
+      []),
+  ]);
   const existing = data.works.find((item) => item.id === draft.workId);
+  const sharedWork = data.crm?.opportunities.find(
+    (item) => item.id === draft.crmOpportunityId,
+  )?.work;
   if (draft.workId && !existing)
     throw new Error("A obra selecionada não está mais disponível.");
   for (const key of ["architectId", "contractorId"]) {
     if (
       draft[key] &&
       data.contacts.find((item) => item.id === draft[key])?.deleted &&
-      existing?.[key] !== draft[key]
+      existing?.[key] !== draft[key] &&
+      sharedWork?.[key] !== draft[key]
     )
       throw new Error("Este contato foi excluído. Selecione outro contato.");
   }
@@ -227,6 +238,9 @@ export function recordVisit(
       Object.keys(newAddress()).map((key) => [key, draft[key].trim()]),
     ),
     updatedAt: new Date().toISOString(),
+    ...(draft.crmOpportunityId
+      ? { crmOpportunityId: draft.crmOpportunityId }
+      : {}),
   };
   const visit = {
     ...draft,

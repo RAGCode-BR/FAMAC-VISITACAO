@@ -106,6 +106,13 @@ export function validateRecord(kind, record, allowedProducts = PRODUCTS) {
     )
       fail("Tipo de obra ou UF inválida.");
   } else if (kind === "visits") {
+    if (
+      (record.crmEnabled !== undefined &&
+        typeof record.crmEnabled !== "boolean") ||
+      (record.crmOpportunityId && !validId(record.crmOpportunityId)) ||
+      (record.crmSaleId && !validId(record.crmSaleId))
+    )
+      fail("Vínculo com o CRM inválido.");
     for (const field of [
       "workName",
       "date",
