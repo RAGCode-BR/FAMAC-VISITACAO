@@ -433,6 +433,47 @@ try {
   console.log(
     "PASS: 10 telas em celular de 360px, menu acessível, nenhuma chamada ao banco antigo, nenhum erro React",
   );
+
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await navigate("Visitas realizadas");
+  const soldVisit = page.locator(".table-scroll tbody tr").filter({
+    hasText: "1 vendidos",
+  });
+  assert.equal(await soldVisit.count(), 1);
+  await soldVisit.getByRole("button", { name: /Excluir visita de/ }).click();
+  const confirmation = page.getByRole("dialog", { name: "Excluir visita?" });
+  await confirmation.getByText(/O fechamento e seu valor continuarão/).waitFor();
+  await confirmation.getByRole("button", { name: "Cancelar" }).click();
+  assert.equal(await soldVisit.count(), 1);
+  await soldVisit.getByRole("button", { name: /Excluir visita de/ }).click();
+  await confirmation.getByRole("button", { name: "Excluir visita" }).click();
+  await confirmation.waitFor({ state: "hidden" });
+  assert.equal(await page.locator(".table-scroll tbody tr").count(), 2);
+  await navigate("Relatórios");
+  assert.equal(
+    await page.locator(".metric").first().locator("strong").innerText(),
+    "2",
+  );
+  assert.match(await page.locator(".crm-sales-totals").innerText(), /1\.500,00/);
+  await navigate("Visitas realizadas");
+  const completedPlanVisit = page.locator(".table-scroll tbody tr").filter({
+    hasText: "1 oferecidos",
+  });
+  await completedPlanVisit
+    .getByRole("button", { name: /Excluir visita de/ })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Excluir visita?" })
+    .getByRole("button", { name: "Excluir visita" })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Excluir visita?" })
+    .waitFor({ state: "hidden" });
+  await navigate("Programação");
+  await page.getByText("Programada", { exact: true }).waitFor();
+  console.log(
+    "PASS: exclusão individual mantém a venda e restaura o retorno programado",
+  );
 } catch (error) {
   await page.screenshot({
     path: "test-results/failure.png",

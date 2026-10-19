@@ -32,6 +32,7 @@ O build está em `dist/`; a prévia do build usa **http://127.0.0.1:4174/**. Cad
 - Visitas de Relacionamento podem ser registradas sem produtos; em Prospecção e Fechamento, a seleção de produto continua obrigatória.
 - Fotos por câmera/galeria, com até 6 imagens, limitadas a 12 MB por arquivo antes da otimização local.
 - Histórico de visitas e detalhes com fotos, observações e próxima ação.
+- Exclusão individual de visitas com confirmação. A visita sai das listas e dos indicadores; vendas vinculadas permanecem no CRM e no financeiro.
 - CRM compartilhado com kanban de cinco etapas, responsável atual, próximos retornos e histórico da equipe. Uma obra mantém a mesma oportunidade entre colaboradores; visitas e fotos privadas conservam sua autoria. Vendas parciais, encerramento com motivo e reabertura são registrados sem apagar o histórico.
 - Negociações encerradas ficam em uma lista própria com busca, filtros e paginação de 12 registros. As etapas finais do quadro exibem somente resumos; reabrir devolve a obra ao acompanhamento. No histórico, vendas feitas durante a visita aparecem acima da visita do mesmo salvamento.
 - Fechamentos do CRM e das visitas são conciliados em um relatório financeiro com filtros e CSV, sem duplicar vendas vinculadas. Quem prospectou e quem vendeu aparecem separadamente. Uma venda lançada no CRM pode ser vinculada à visita do vendedor.

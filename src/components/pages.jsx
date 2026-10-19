@@ -59,7 +59,7 @@ const roleName = (role) =>
     architect: "Arquiteto",
     responsible: "Responsável",
   })[role];
-export function VisitsTable({ visits, onDetail }) {
+export function VisitsTable({ visits, onDetail, onDelete }) {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const filtered = visits.filter((item) =>
@@ -100,7 +100,7 @@ export function VisitsTable({ visits, onDetail }) {
                   <th>Produtos</th>
                   <th>Resultado</th>
                   <th>
-                    <span className="sr-only">Detalhes</span>
+                    <span className="sr-only">Ações</span>
                   </th>
                 </tr>
               </thead>
@@ -167,6 +167,15 @@ export function VisitsTable({ visits, onDetail }) {
                         >
                           <Icon name="chevron" size={18} />
                         </button>
+                        {onDelete && (
+                          <button
+                            className="icon-button delete-action"
+                            aria-label={`Excluir visita de ${item.workName} em ${dateLabel(item.date)}`}
+                            onClick={() => onDelete(item)}
+                          >
+                            <Icon name="trash" size={17} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

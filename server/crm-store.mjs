@@ -1,5 +1,10 @@
 import { isDeepStrictEqual } from "node:util";
-import { applyCrmAction, emptyCrm, recordCrmVisit } from "../src/lib/crm.mjs";
+import {
+  applyCrmAction,
+  emptyCrm,
+  markCrmVisitDeleted,
+  recordCrmVisit,
+} from "../src/lib/crm.mjs";
 import { person, productNames } from "../src/lib/domain.mjs";
 import { validId, fail, requireOwner } from "./policy.mjs";
 
@@ -56,13 +61,18 @@ async function persistCrm(db, before, after) {
     );
   }
   for (const row of after.visitLinks) {
-    if (before.visitLinks.some((item) => item.visitId === row.visitId))
-      continue;
+    const original = before.visitLinks.find((item) => item.visitId === row.visitId);
+    if (isDeepStrictEqual(original, row)) continue;
     await db.query(
-      "INSERT INTO famac.crm_visit_links(visit_id,opportunity_id,payload) VALUES ($1,$2,$3)",
+      "INSERT INTO famac.crm_visit_links(visit_id,opportunity_id,payload) VALUES ($1,$2,$3) ON CONFLICT(visit_id) DO UPDATE SET payload=excluded.payload",
       [row.visitId, row.opportunityId, row],
     );
   }
+}
+export async function deleteCrmVisit(db, visitId, actor) {
+  const before = await readCrm(db);
+  const after = markCrmVisitDeleted(before, visitId, actor);
+  await persistCrm(db, before, after);
 }
 export async function syncVisitCrm(
   db,
@@ -100,7 +110,7 @@ export async function backfillCrm(db) {
     "SELECT value FROM famac.revision WHERE singleton=true FOR UPDATE",
   );
   const result = await db.query(
-    "SELECT v.payload,v.owner_id FROM famac.visits v WHERE NOT EXISTS (SELECT 1 FROM famac.crm_visit_links l WHERE l.visit_id=v.id) AND COALESCE(v.payload->>'crmEnabled','')<>'false' ORDER BY v.visit_date,v.updated_at,v.id",
+    "SELECT v.payload,v.owner_id FROM famac.visits v WHERE NOT EXISTS (SELECT 1 FROM famac.crm_visit_links l WHERE l.visit_id=v.id) AND v.payload->>'deleted' IS DISTINCT FROM 'true' AND COALESCE(v.payload->>'crmEnabled','')<>'false' ORDER BY v.visit_date,v.updated_at,v.id",
   );
   let integrated = 0;
   for (const row of result.rows)

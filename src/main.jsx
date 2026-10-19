@@ -123,6 +123,9 @@ function App({ account, onLogout }) {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [detail, setDetail] = useState(null);
+  const [deletingVisit, setDeletingVisit] = useState(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [activePlan, setActivePlan] = useState(null);
   const [formKey, setFormKey] = useState(0);
   const [dirty, setDirty] = useState(false);
@@ -280,6 +283,22 @@ function App({ account, onLogout }) {
       ),
     [persist],
   );
+  const deleteVisit = async () => {
+    if (!deletingVisit || deleteBusy) return;
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      await persist(
+        () => repository.deleteVisit(deletingVisit.id),
+        "Visita excluída.",
+      );
+      setDeletingVisit(null);
+    } catch (error) {
+      setDeleteError(error.message);
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
   const navigate = (next) => {
     setPage(next);
     setNavOpen(false);
@@ -535,7 +554,14 @@ function App({ account, onLogout }) {
                   Nova visita
                 </button>
               </div>
-              <VisitsTable visits={data.visits} onDetail={setDetail} />
+              <VisitsTable
+                visits={data.visits}
+                onDetail={setDetail}
+                onDelete={(visit) => {
+                  setDeletingVisit(visit);
+                  setDeleteError("");
+                }}
+              />
             </section>
           )}
           {page === "works" && (
@@ -611,6 +637,40 @@ function App({ account, onLogout }) {
         </div>
       )}
       {detail && <VisitDetail visit={detail} onClose={() => setDetail(null)} />}
+      {deletingVisit && (
+        <Modal
+          title="Excluir visita?"
+          onClose={() => !deleteBusy && setDeletingVisit(null)}
+        >
+          <p>
+            A visita de <strong>{deletingVisit.workName}</strong>, realizada em{" "}
+            {new Date(`${deletingVisit.date}T12:00:00`).toLocaleDateString(
+              "pt-BR",
+            )}, sairá das listas e dos indicadores de visitas.
+          </p>
+          <p>O registro original ficará preservado para auditoria.</p>
+          {deletingVisit.sold.length > 0 && (
+            <p>O fechamento e seu valor continuarão no CRM e no financeiro.</p>
+          )}
+          {deleteError && <p className="error" role="alert">{deleteError}</p>}
+          <footer className="modal-actions">
+            <button
+              className="button secondary"
+              disabled={deleteBusy}
+              onClick={() => setDeletingVisit(null)}
+            >
+              Cancelar
+            </button>
+            <button
+              className="button primary"
+              disabled={deleteBusy}
+              onClick={deleteVisit}
+            >
+              {deleteBusy ? "Excluindo…" : "Excluir visita"}
+            </button>
+          </footer>
+        </Modal>
+      )}
       {passwordOpen && <PasswordForm onClose={() => setPasswordOpen(false)} />}
       {pendingPlan && (
         <Modal title="Abrir outra visita?" onClose={() => setPendingPlan(null)}>

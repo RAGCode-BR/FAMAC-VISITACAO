@@ -1,7 +1,11 @@
 import { emptyData } from "./domain.mjs";
 import { cloudEnabled } from "./auth.mjs";
 import { cloudRepository } from "./cloud-repository.mjs";
-import { applyCrmAction, reconcileLocalCrm } from "./crm.mjs";
+import {
+  applyCrmAction,
+  markCrmVisitDeleted,
+  reconcileLocalCrm,
+} from "./crm.mjs";
 import { person, productNames } from "./domain.mjs";
 let actorTeamId = "claudionor";
 
@@ -87,6 +91,28 @@ export const repository = cloudEnabled
           productNames(current),
         );
         return localRepository.save({ ...current, crm });
+      },
+      async deleteVisit(id) {
+        const current = await localRepository.load();
+        const visit = current.visits.find((item) => item.id === id);
+        if (!visit) throw new Error("Visita não encontrada.");
+        const crm = markCrmVisitDeleted(current.crm, id, {
+          role: "admin",
+          teamId: actorTeamId,
+          name: person(actorTeamId),
+        });
+        return localRepository.save({
+          ...current,
+          crm,
+          visits: current.visits.filter((item) => item.id !== id),
+          plans: current.plans.map((plan) => {
+            if (plan.visitId !== id) return plan;
+            const next = { ...plan };
+            delete next.visitId;
+            if (next.status === "completed") next.status = "planned";
+            return next;
+          }),
+        });
       },
       clear() {},
       async photoUrl(photo) {

@@ -16,6 +16,7 @@ import {
   recordCrmVisit,
   crmWorkKey,
   crmTimeline,
+  markCrmVisitDeleted,
 } from "../src/lib/crm.mjs";
 
 test("histórico mostra venda acima da visita do mesmo salvamento sem reordenar ações independentes", () => {
@@ -143,6 +144,35 @@ test("visitas alimentam uma oportunidade por obra e não compartilham fotos nem 
   assert.deepEqual(data.visits[0], original);
   assert.equal(data.crm.opportunities[0].prospectorId, "claudionor");
   assert.equal(reconcileLocalCrm(data).crm.visitLinks.length, 2);
+});
+test("excluir uma visita oculta sua ação, mantém a venda e preserva a auditoria", () => {
+  const data = reconcileLocalCrm(
+    recordVisit(
+      emptyData(),
+      draft({ sold: ["FORRO"], saleValue: 350, stage: "closing" }),
+    ),
+    actor("claudionor"),
+  );
+  const visitId = data.visits[0].id;
+  const crm = markCrmVisitDeleted(
+    data.crm,
+    visitId,
+    actor("claudionor"),
+    "2026-10-19T12:00:00.000Z",
+  );
+  assert.equal(crm.visitLinks[0].deleted, true);
+  assert.equal(crm.opportunities[0].lastVisitDate, "");
+  assert.deepEqual(
+    crmTimeline(crm.activities, crm.opportunities[0].id)
+      .filter((event) => ["visit", "visit_deleted", "sale"].includes(event.type))
+      .map((event) => event.type),
+    ["visit_deleted", "sale"],
+  );
+  assert.equal(
+    businessSales({ ...data, crm, visits: [] })[0].value,
+    350,
+  );
+  assert.deepEqual(markCrmVisitDeleted(crm, visitId, actor("claudionor")), crm);
 });
 test("equipe negocia e vende parcialmente; o último produto conclui sem duplicar valores", () => {
   let data = seed();

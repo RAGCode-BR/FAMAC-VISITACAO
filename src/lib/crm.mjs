@@ -25,8 +25,17 @@ export const emptyCrm = () => ({
 // O histórico é decrescente. Visita e venda do mesmo salvamento aparecem
 // como visita → venda, sem alterar a sequência persistida nem vendas anteriores.
 export function crmTimeline(activities, opportunityId) {
+  const deletedVisits = new Set(
+    activities
+      .filter((event) => event.type === "visit_deleted")
+      .map((event) => event.sourceVisitId),
+  );
   const events = activities
-    .filter((event) => event.opportunityId === opportunityId)
+    .filter(
+      (event) =>
+        event.opportunityId === opportunityId &&
+        !(event.type === "visit" && deletedVisits.has(event.sourceVisitId)),
+    )
     .sort((a, b) => b.sequence - a.sequence);
   for (let index = 0; index < events.length - 1; index++) {
     const visit = events[index];
@@ -408,6 +417,39 @@ export function recordCrmVisit(
     at,
   );
   return { crm, opportunityId: opportunity.id };
+}
+
+export function markCrmVisitDeleted(
+  current,
+  visitId,
+  actor,
+  at = new Date().toISOString(),
+) {
+  const crm = structuredClone(current || emptyCrm());
+  const link = crm.visitLinks.find((item) => item.visitId === visitId);
+  if (!link || link.deleted) return crm;
+  link.deleted = true;
+  const opportunity = crm.opportunities.find(
+    (item) => item.id === link.opportunityId,
+  );
+  if (!opportunity) return crm;
+  opportunity.lastVisitDate =
+    crm.visitLinks
+      .filter((item) => item.opportunityId === opportunity.id && !item.deleted)
+      .map((item) => item.date)
+      .sort()
+      .at(-1) || "";
+  opportunity.version++;
+  opportunity.updatedAt = at;
+  activity(
+    crm,
+    opportunity,
+    actor,
+    "visit_deleted",
+    { sourceVisitId: visitId },
+    at,
+  );
+  return crm;
 }
 
 export function applyCrmAction(

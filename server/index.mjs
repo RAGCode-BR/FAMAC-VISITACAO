@@ -19,7 +19,12 @@ import {
   validateRecord,
 } from "./policy.mjs";
 import { connectionString } from "./connection.mjs";
-import { installCrmRoutes, readCrm, syncVisitCrm } from "./crm-store.mjs";
+import {
+  deleteCrmVisit,
+  installCrmRoutes,
+  readCrm,
+  syncVisitCrm,
+} from "./crm-store.mjs";
 import {
   productKey,
   productNames,
@@ -96,13 +101,20 @@ async function readState(db, member, since) {
   const state = { version: 1, revision: Number(revision.rows[0].value) };
   if (state.revision === since) return null;
   for (const kind of collections) {
-    const where =
-      kind === "contacts"
-        ? "WHERE owner_id=$1 OR payload->>'role' IN ('architect','contractor')"
-        : "WHERE owner_id=$1";
+    const scoped = member.role !== "admin" && kind !== "products";
+    const conditions = [];
+    if (scoped)
+      conditions.push(
+        kind === "contacts"
+          ? "(owner_id=$1 OR payload->>'role' IN ('architect','contractor'))"
+          : "owner_id=$1",
+      );
+    if (kind === "visits")
+      conditions.push("payload->>'deleted' IS DISTINCT FROM 'true'");
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const result = await db.query(
-      `SELECT payload, owner_id FROM famac.${kind} ${member.role === "admin" || kind === "products" ? "" : where} ORDER BY updated_at,id`,
-      member.role === "admin" || kind === "products" ? [] : [member.teamId],
+      `SELECT payload, owner_id FROM famac.${kind} ${where} ORDER BY updated_at,id`,
+      scoped ? [member.teamId] : [],
     );
     state[kind] = result.rows.map((row) => ({
       ...row.payload,
@@ -150,6 +162,72 @@ app.get("/operations/:id", async (c) => {
     [c.req.param("id"), c.get("member").authId],
   );
   return c.json({ committed: Boolean(result.rowCount) });
+});
+app.delete("/visits/:id", async (c) => {
+  const id = c.req.param("id");
+  const { operationId } = await c.req.json();
+  if (!validId(id) || !validId(operationId)) fail("Operação inválida.");
+  const member = c.get("member");
+  const db = await pool.connect();
+  try {
+    await db.query("BEGIN");
+    await db.query(
+      "SELECT value FROM famac.revision WHERE singleton=true FOR UPDATE",
+    );
+    const repeated = await db.query(
+      "SELECT auth_id FROM famac.operations WHERE id=$1",
+      [operationId],
+    );
+    if (repeated.rowCount) {
+      if (repeated.rows[0].auth_id !== member.authId)
+        fail("Operação inválida.", 403);
+    } else {
+      const visit = await db.query(
+        "SELECT owner_id,payload FROM famac.visits WHERE id=$1 FOR UPDATE",
+        [id],
+      );
+      if (!visit.rowCount || visit.rows[0].payload.deleted)
+        fail("Visita não encontrada.", 404);
+      requireOwner(member, visit.rows[0].owner_id);
+      const deletedAt = new Date().toISOString();
+      await db.query(
+        "UPDATE famac.visits SET payload=payload || jsonb_build_object('deleted',true,'deletedAt',$2::text,'deletedBy',$3::text),updated_at=now() WHERE id=$1",
+        [id, deletedAt, member.authId],
+      );
+      const plans = await db.query(
+        "SELECT id,payload FROM famac.plans WHERE owner_id=$1 AND payload->>'visitId'=$2 FOR UPDATE",
+        [visit.rows[0].owner_id, id],
+      );
+      for (const plan of plans.rows) {
+        const payload = { ...plan.payload };
+        delete payload.visitId;
+        if (payload.status === "completed") payload.status = "planned";
+        await db.query(
+          "UPDATE famac.plans SET payload=$2,updated_at=now() WHERE id=$1",
+          [plan.id, payload],
+        );
+      }
+      await deleteCrmVisit(db, id, {
+        name: member.name,
+        teamId: member.teamId,
+      });
+      await db.query(
+        "UPDATE famac.revision SET value=value+1 WHERE singleton=true",
+      );
+      await db.query(
+        "INSERT INTO famac.operations(id,auth_id) VALUES ($1,$2)",
+        [operationId, member.authId],
+      );
+    }
+    const state = await readState(db, member);
+    await db.query("COMMIT");
+    return c.json(state);
+  } catch (error) {
+    await db.query("ROLLBACK");
+    throw error;
+  } finally {
+    db.release();
+  }
 });
 app.put("/state", async (c) => {
   const member = c.get("member");
@@ -248,12 +326,12 @@ app.put("/state", async (c) => {
           );
           continue;
         }
-        if (kind === "visits" && previous.has(record.id))
-          fail("O histórico de visitas deve ser preservado.");
         const existing = await db.query(
           `SELECT owner_id,payload FROM famac.${kind} WHERE id=$1`,
           [record.id],
         );
+        if (kind === "visits" && existing.rowCount)
+          fail("O histórico de visitas deve ser preservado.");
         const owner =
           existing.rows[0]?.owner_id ||
           (kind === "visits" || kind === "plans" ? record.userId : actorTeamId);
@@ -515,12 +593,14 @@ app.post("/photos", async (c) => {
 });
 async function photoFor(member, id) {
   if (!validId(id)) fail("Foto inválida.");
-  const result = await pool.query("SELECT * FROM famac.photos WHERE id=$1", [
-    id,
-  ]);
+  const result = await pool.query(
+    "SELECT photo.*,visit.payload->>'deleted' AS visit_deleted FROM famac.photos photo LEFT JOIN famac.visits visit ON visit.id=photo.visit_id WHERE photo.id=$1",
+    [id],
+  );
   if (!result.rowCount) fail("Foto não encontrada.", 404);
   const photo = result.rows[0];
   requireOwner(member, photo.owner_id);
+  if (photo.visit_deleted === "true") fail("Foto não encontrada.", 404);
   return photo;
 }
 app.get("/photos/:id/url", async (c) => {

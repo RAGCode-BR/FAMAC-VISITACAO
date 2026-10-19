@@ -422,7 +422,9 @@ export default function Crm({
                               <small>
                                 {
                                   crm.visitLinks.filter(
-                                    (link) => link.opportunityId === item.id,
+                                    (link) =>
+                                      link.opportunityId === item.id &&
+                                      !link.deleted,
                                   ).length
                                 }{" "}
                                 visitas
@@ -997,6 +999,7 @@ function eventLabel(event) {
     {
       created: "Oportunidade aberta",
       visit: "Visita registrada",
+      visit_deleted: "Visita excluída",
       sale: "Venda registrada",
       note: "Contato / ação realizada",
       lost: "Encerrada sem negócio",
