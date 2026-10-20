@@ -127,13 +127,18 @@ export default function VisitForm({
         data.contacts.find((item) => item.id === work.architectId)?.name || "",
     });
   };
-  const offered = (product, checked) =>
+  const offered = (product, checked) => {
+    const sold = checked
+      ? form.sold
+      : form.sold.filter((item) => item !== product);
     update({
       offered: checked
         ? [...form.offered, product]
         : form.offered.filter((item) => item !== product),
-      sold: checked ? form.sold : form.sold.filter((item) => item !== product),
+      sold,
+      ...(!sold.length ? { saleValue: "" } : {}),
     });
+  };
   const upload = async (event) => {
     const files = [...event.target.files];
     event.target.value = "";
@@ -357,22 +362,48 @@ export default function VisitForm({
             <div>
               <h2>Produtos e oportunidades</h2>
               <p>
-                {form.stage === "relationship" && !form.sold.length
+                {form.stage === "relationship"
                   ? "Em visitas de relacionamento, os produtos são opcionais."
-                  : "Marque o que foi oferecido e sinalize as vendas."}
+                  : form.stage === "closing"
+                    ? "Marque os produtos oferecidos e os vendidos neste fechamento."
+                    : "Marque os produtos oferecidos nesta prospecção."}
               </p>
             </div>
             <Icon name="box" />
+          </div>
+          <div className="fields two">
+            <Select
+              label="Tipo de visita"
+              disabled={!!form.crmSaleId}
+              value={form.stage}
+              onChange={(stage) =>
+                update({
+                  stage,
+                  ...(stage === "closing" ? {} : { sold: [], saleValue: "", crmSaleId: "" }),
+                  crmEnabled: form.crmOpportunityId
+                    ? true
+                    : stage !== "relationship",
+                })
+              }
+            >
+              {Object.entries(STAGES).map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </Select>
           </div>
           <div className="product-legend">
             <span>
               <i className="dot offered" />
               Oferecido / prospectado
             </span>
-            <span>
-              <i className="dot sold" />
-              Vendido
-            </span>
+            {form.stage === "closing" && (
+              <span>
+                <i className="dot sold" />
+                Vendido
+              </span>
+            )}
           </div>
           <div className="product-grid">
             {catalogProducts(data).map((item, index) => {
@@ -410,20 +441,22 @@ export default function VisitForm({
                       Ver fotos
                     </button>
                   )}
-                  {selected && (
+                  {selected && form.stage === "closing" && (
                     <label className="sold-choice">
                       <input
                         type="checkbox"
                         disabled={!!form.crmSaleId}
                         checked={sold}
                         aria-label={`Vendeu ${product}`}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          const nextSold = event.target.checked
+                            ? [...form.sold, product]
+                            : form.sold.filter((item) => item !== product);
                           update({
-                            sold: event.target.checked
-                              ? [...form.sold, product]
-                              : form.sold.filter((item) => item !== product),
-                          })
-                        }
+                            sold: nextSold,
+                            ...(!nextSold.length ? { saleValue: "" } : {}),
+                          });
+                        }}
                       />
                       {sold ? "Vendido" : "Marcar venda"}
                     </label>
@@ -438,38 +471,21 @@ export default function VisitForm({
               onClose={() => setPresenting(null)}
             />
           )}
-          <div className="fields two">
-            <Select
-              label="Tipo de visita"
-              disabled={!!form.crmSaleId}
-              value={form.sold.length ? "closing" : form.stage}
-              onChange={(stage) =>
-                update({
-                  stage,
-                  crmEnabled: form.crmOpportunityId
-                    ? true
-                    : stage !== "relationship",
-                })
-              }
-            >
-              {Object.entries(STAGES).map(([id, name]) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
-            </Select>
-            <Field
-              label="Valor total vendido (R$)"
-              disabled={!!form.crmSaleId}
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.saleValue}
-              onChange={change("saleValue")}
-              placeholder="0,00"
-              hint="Opcional. Valor total da visita."
-            />
-          </div>
+          {form.stage === "closing" && (
+            <div className="fields two">
+              <Field
+                label="Valor total vendido (R$)"
+                disabled={!!form.crmSaleId}
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.saleValue}
+                onChange={change("saleValue")}
+                placeholder="0,00"
+                hint="Opcional. Valor total da visita."
+              />
+            </div>
+          )}
           <Field label="O que foi conversado / oferecido?">
             <textarea
               value={form.notes}
@@ -557,7 +573,7 @@ export default function VisitForm({
                           saleValue: String(sale.value),
                           stage: "closing",
                         }
-                      : { crmSaleId: "" },
+                      : { crmSaleId: "", sold: [], saleValue: "" },
                   );
                 }}
               >

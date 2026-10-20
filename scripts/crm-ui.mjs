@@ -6,6 +6,7 @@ import { applyCrmAction, reconcileLocalCrm } from "../src/lib/crm.mjs";
 await mkdir("test-results", { recursive: true });
 const browser = await chromium.launch({
   executablePath:
+    process.env.BROWSER_PATH ||
     "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
   headless: true,
 });
@@ -70,6 +71,7 @@ try {
       state: "MT",
       offered: index === 3 ? ["TOLDOS"] : ["FORRO", "GESSO"],
       sold: index === 3 ? ["TOLDOS"] : [],
+      stage: index === 3 ? "closing" : "prospecting",
       saleValue: index === 3 ? 2000 : 0,
     });
   for (let index = 1; index <= 15; index++)
@@ -83,6 +85,7 @@ try {
       state: "MT",
       offered: ["TOLDOS"],
       sold: ["TOLDOS"],
+      stage: "closing",
       saleValue: 10,
     });
   data = reconcileLocalCrm(data, null, true);

@@ -175,6 +175,9 @@ async function register(
   else {
     await form.getByLabel(`Oferecer ${product}`, { exact: true }).check();
     if (product !== "FORRO") {
+      await form
+        .getByLabel("Tipo de visita", { exact: true })
+        .selectOption("closing");
       await form.getByLabel(`Vendeu ${product}`, { exact: true }).check();
       await form
         .getByLabel("Valor total vendido (R$)", { exact: true })

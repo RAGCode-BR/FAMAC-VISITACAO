@@ -191,6 +191,11 @@ export function validateVisit(visit, allowedProducts = PRODUCTS) {
     throw new Error("Informe um valor de venda válido.");
   if (Number(visit.saleValue) > 0 && !visit.sold.length)
     throw new Error("Selecione o produto vendido antes de informar o valor.");
+  if (
+    visit.stage !== "closing" &&
+    (visit.sold.length || Number(visit.saleValue) > 0)
+  )
+    throw new Error("Vendas só podem ser registradas em visitas de fechamento.");
   if (visit.stage === "closing" && !visit.sold.length)
     throw new Error(
       "Para registrar um fechamento, selecione ao menos um produto vendido.",
@@ -250,7 +255,7 @@ export function recordVisit(
     id: visitId,
     workId: work.id,
     workName: work.name,
-    stage: draft.sold.length ? "closing" : draft.stage,
+    stage: draft.stage,
     saleValue: Number(draft.saleValue) || 0,
     contractorName:
       data.contacts.find((item) => item.id === draft.contractorId)?.name || "",

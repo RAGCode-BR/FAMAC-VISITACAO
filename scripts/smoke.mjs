@@ -162,10 +162,33 @@ try {
   await addContact("Arquiteto", "Arquiteta teste");
   await page.getByLabel("Oferecer FORRO", { exact: true }).check();
   await page.getByLabel("Oferecer GESSO", { exact: true }).check();
+  assert.equal(await page.getByLabel("Vendeu FORRO", { exact: true }).count(), 0);
+  assert.equal(
+    await page.getByLabel("Valor total vendido (R$)", { exact: true }).count(),
+    0,
+  );
+  await page.getByLabel("Tipo de visita", { exact: true }).selectOption("closing");
   await page.getByLabel("Vendeu FORRO", { exact: true }).check();
   await page
     .getByLabel("Valor total vendido (R$)", { exact: true })
     .fill("1500");
+  await page.getByLabel("Tipo de visita", { exact: true }).selectOption("prospecting");
+  assert.equal(await page.getByLabel("Vendeu FORRO", { exact: true }).count(), 0);
+  assert.equal(
+    await page.getByLabel("Valor total vendido (R$)", { exact: true }).count(),
+    0,
+  );
+  await page.getByLabel("Tipo de visita", { exact: true }).selectOption("closing");
+  assert.equal(
+    await page.getByLabel("Vendeu FORRO", { exact: true }).isChecked(),
+    false,
+  );
+  assert.equal(
+    await page.getByLabel("Valor total vendido (R$)", { exact: true }).inputValue(),
+    "",
+  );
+  await page.getByLabel("Vendeu FORRO", { exact: true }).check();
+  await page.getByLabel("Valor total vendido (R$)", { exact: true }).fill("1500");
   await page
     .locator("input[type=file][multiple]")
     .setInputFiles("public/famac-logo.jpg");

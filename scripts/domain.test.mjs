@@ -29,6 +29,7 @@ const draft = (extra) => ({
   state: "SP",
   offered: ["FORRO", "GESSO"],
   ...extra,
+  stage: extra?.stage || (extra?.sold?.length ? "closing" : "prospecting"),
 });
 const ids = { workId: "work-1", visitId: "visit-1", planId: "plan-1" };
 
@@ -146,6 +147,14 @@ test("bairro obrigatório, telefone com DDD, datas e coerência de produtos", ()
   assert.throws(() => validateVisit(draft({ neighborhood: "  " })), /bairro/);
   assert.throws(() => validateVisit(draft({ phone: "123" })), /telefone/);
   assert.throws(() => validateVisit(draft({ sold: ["PORTA"] })), /oferecidos/);
+  assert.throws(
+    () => validateVisit(draft({ stage: "prospecting", sold: ["FORRO"] })),
+    /visitas de fechamento/,
+  );
+  assert.throws(
+    () => validateVisit(draft({ stage: "relationship", sold: ["FORRO"] })),
+    /visitas de fechamento/,
+  );
   assert.throws(
     () => validateVisit(draft({ saleValue: "500", sold: [] })),
     /produto vendido/,

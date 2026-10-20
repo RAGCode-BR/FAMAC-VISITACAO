@@ -140,6 +140,7 @@ const draft = (extra = {}) => ({
   state: "MT",
   offered: ["FORRO", "GESSO"],
   ...extra,
+  stage: extra.stage || (extra.sold?.length ? "closing" : "prospecting"),
 });
 function seed() {
   return reconcileLocalCrm(
