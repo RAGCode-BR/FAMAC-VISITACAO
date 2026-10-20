@@ -283,6 +283,12 @@ function App({ account, onLogout }) {
       ),
     [persist],
   );
+  const deleteRecord = useCallback((kind, id) =>
+    persist(() => repository.deleteRecord(kind, id), kind === "works" ? "Obra excluída." : "Programação excluída."), [persist]);
+  const createCrmOpportunity = useCallback((workId) =>
+    persist(() => repository.createCrmOpportunity(workId), "Cartão criado no CRM."), [persist]);
+  const updateCrmStageLabels = useCallback((labels) =>
+    persist(() => repository.updateCrmStageLabels(labels), "Colunas atualizadas."), [persist]);
   const deleteVisit = async () => {
     if (!deletingVisit || deleteBusy) return;
     setDeleteBusy(true);
@@ -565,7 +571,7 @@ function App({ account, onLogout }) {
             </section>
           )}
           {page === "works" && (
-            <Works data={operationalData} save={save} onVisit={startVisit} />
+            <Works data={operationalData} save={save} onVisit={startVisit} onDelete={deleteRecord} />
           )}
           {page === "crm" && (
             <Crm
@@ -573,6 +579,8 @@ function App({ account, onLogout }) {
               actorId={userId}
               account={account}
               onAction={crmAction}
+              onCreate={createCrmOpportunity}
+              onLabels={updateCrmStageLabels}
               onVisit={(opportunity) =>
                 startVisit({ crmOpportunityId: opportunity.id, userId })
               }
@@ -589,6 +597,8 @@ function App({ account, onLogout }) {
               canAssign={!account}
               save={save}
               onVisit={startVisit}
+              onDelete={deleteRecord}
+              onCrmAction={crmAction}
             />
           )}
           {page === "reports" && (

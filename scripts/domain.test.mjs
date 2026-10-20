@@ -114,7 +114,7 @@ test("base vazia contém apenas a configuração dos produtos e colaboradores so
   assert.equal(new Set(PRODUCTS).size, 14);
   assert.deepEqual(
     TEAM.map((user) => user.name),
-    ["Claudionor", "Charles", "Celso"],
+    ["Claudionor", "Charles", "Celso", "Recepção"],
   );
 });
 

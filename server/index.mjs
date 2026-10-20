@@ -109,7 +109,7 @@ async function readState(db, member, since) {
           ? "(owner_id=$1 OR payload->>'role' IN ('architect','contractor'))"
           : "owner_id=$1",
       );
-    if (kind === "visits")
+    if (["visits", "works", "plans"].includes(kind))
       conditions.push("payload->>'deleted' IS DISTINCT FROM 'true'");
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const result = await db.query(
@@ -229,6 +229,41 @@ app.delete("/visits/:id", async (c) => {
     db.release();
   }
 });
+app.delete("/records/:kind/:id", async (c) => {
+  const { kind, id } = c.req.param();
+  const { operationId } = await c.req.json();
+  if (!["works", "plans"].includes(kind) || !validId(id) || !validId(operationId))
+    fail("Operação inválida.");
+  const member = c.get("member");
+  const db = await pool.connect();
+  try {
+    await db.query("BEGIN");
+    await db.query("SELECT value FROM famac.revision WHERE singleton=true FOR UPDATE");
+    const repeated = await db.query("SELECT auth_id FROM famac.operations WHERE id=$1", [operationId]);
+    if (repeated.rowCount) {
+      if (repeated.rows[0].auth_id !== member.authId) fail("Operação inválida.", 403);
+    } else {
+      const record = await db.query(`SELECT owner_id,payload FROM famac.${kind} WHERE id=$1 FOR UPDATE`, [id]);
+      if (!record.rowCount || record.rows[0].payload.deleted)
+        fail(kind === "works" ? "Obra não encontrada." : "Programação não encontrada.", 404);
+      requireOwner(member, record.rows[0].owner_id);
+      const mark = { deleted: true, deletedAt: new Date().toISOString(), deletedBy: member.authId };
+      await db.query(`UPDATE famac.${kind} SET payload=payload || $2::jsonb,updated_at=now() WHERE id=$1`, [id, mark]);
+      if (kind === "works")
+        await db.query("UPDATE famac.plans SET payload=payload || $2::jsonb,updated_at=now() WHERE work_id=$1 AND payload->>'deleted' IS DISTINCT FROM 'true'", [id, mark]);
+      await db.query("UPDATE famac.revision SET value=value+1 WHERE singleton=true");
+      await db.query("INSERT INTO famac.operations(id,auth_id) VALUES ($1,$2)", [operationId, member.authId]);
+    }
+    const state = await readState(db, member);
+    await db.query("COMMIT");
+    return c.json(state);
+  } catch (error) {
+    await db.query("ROLLBACK");
+    throw error;
+  } finally {
+    db.release();
+  }
+});
 app.put("/state", async (c) => {
   const member = c.get("member");
   const { state, revision, operationId, actorTeamId } = await c.req.json();
@@ -330,6 +365,8 @@ app.put("/state", async (c) => {
           `SELECT owner_id,payload FROM famac.${kind} WHERE id=$1`,
           [record.id],
         );
+        if (existing.rows[0]?.payload.deleted)
+          fail("Este registro foi excluído. Atualize a tela.", 409);
         if (kind === "visits" && existing.rowCount)
           fail("O histórico de visitas deve ser preservado.");
         const owner =
@@ -385,10 +422,10 @@ app.put("/state", async (c) => {
         }
         if (kind === "visits" || kind === "plans") {
           const work = await db.query(
-            "SELECT owner_id FROM famac.works WHERE id=$1",
+            "SELECT owner_id,payload FROM famac.works WHERE id=$1",
             [record.workId],
           );
-          if (!work.rowCount || work.rows[0].owner_id !== owner)
+          if (!work.rowCount || work.rows[0].owner_id !== owner || work.rows[0].payload.deleted)
             fail("Obra indisponível para este colaborador.", 403);
         }
         if (kind === "visits") {
@@ -414,10 +451,16 @@ app.put("/state", async (c) => {
             ]);
           }
         }
+        if (kind === "visits") {
+          const next = await db.query("SELECT nextval('famac.visit_service_number_seq') AS number");
+          payload.serviceNumber = Number(next.rows[0].number);
+        }
         if (kind === "visits" || kind === "plans")
           await db.query(
-            `INSERT INTO famac.${kind}(id,owner_id,work_id,visit_date,payload) VALUES ($1,$2,$3,$4,$5) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,visit_date=excluded.visit_date,updated_at=now()`,
-            [record.id, owner, record.workId, record.date, payload],
+            kind === "visits"
+              ? "INSERT INTO famac.visits(id,owner_id,work_id,visit_date,payload,service_number) VALUES ($1,$2,$3,$4,$5,$6)"
+              : "INSERT INTO famac.plans(id,owner_id,work_id,visit_date,payload) VALUES ($1,$2,$3,$4,$5) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,visit_date=excluded.visit_date,updated_at=now()",
+            kind === "visits" ? [record.id, owner, record.workId, record.date, payload, payload.serviceNumber] : [record.id, owner, record.workId, record.date, payload],
           );
         else
           await db.query(

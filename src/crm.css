@@ -880,3 +880,4 @@ dialog:has(.crm-timeline) h2 {
     display: none;
   }
 }
+.crm-intro-actions { display: flex; gap: .6rem; flex-wrap: wrap; justify-content: flex-end; }

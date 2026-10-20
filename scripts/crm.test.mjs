@@ -17,7 +17,26 @@ import {
   crmWorkKey,
   crmTimeline,
   markCrmVisitDeleted,
+  createCrmOpportunity,
 } from "../src/lib/crm.mjs";
+
+test("cartão manual pode ser ocultado e reaberto sem perder vendas e histórico", () => {
+  const work = { id: crypto.randomUUID(), name: "Hotel", street: "Rua A", number: "10", complement: "", neighborhood: "Centro", city: "Sorriso", state: "MT", type: "Comercial" };
+  const actor = { role: "collaborator", teamId: "claudionor", name: "Claudionor" };
+  const created = createCrmOpportunity(emptyCrm(), work, actor);
+  const item = created.opportunities[0];
+  assert.equal(item.stage, "prospecting");
+  assert.throws(() => createCrmOpportunity(created, work, actor), /já possui/);
+  created.sales.push({ id: crypto.randomUUID(), opportunityId: item.id, value: 500 });
+  const hidden = applyCrmAction(created, item.id, { type: "delete", version: item.version }, actor, []);
+  assert.equal(hidden.opportunities[0].deleted, true);
+  assert.equal(hidden.sales[0].value, 500);
+  assert.equal(hidden.activities.at(-1).type, "deleted");
+  const restored = createCrmOpportunity(hidden, work, actor);
+  assert.equal(restored.opportunities.length, 1);
+  assert.equal(restored.opportunities[0].deleted, false);
+  assert.equal(restored.sales[0].value, 500);
+});
 
 test("histórico mostra venda acima da visita do mesmo salvamento sem reordenar ações independentes", () => {
   const events = [

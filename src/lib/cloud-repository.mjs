@@ -50,6 +50,40 @@ export const cloudRepository = {
       throw error;
     }
   },
+  async deleteRecord(kind, id) {
+    const operationId = crypto.randomUUID();
+    try {
+      return await api(`/records/${kind}/${id}`, {
+        method: "DELETE", body: JSON.stringify({ operationId }),
+      });
+    } catch (error) {
+      if (!error.status) {
+        const outcome = await api(`/operations/${operationId}`).catch(() => null);
+        if (outcome?.committed) return this.load();
+        error.message = "Não foi possível confirmar a exclusão. Atualize e confira a lista.";
+      }
+      throw error;
+    }
+  },
+  async createCrmOpportunity(workId) {
+    return this.crmRequest("/crm/opportunities", "POST", { workId, actorTeamId });
+  },
+  async updateCrmStageLabels(labels) {
+    return this.crmRequest("/crm/stage-labels", "PUT", { labels });
+  },
+  async crmRequest(path, method, body) {
+    const operationId = crypto.randomUUID();
+    try {
+      return await api(path, { method, body: JSON.stringify({ ...body, operationId }) });
+    } catch (error) {
+      if (!error.status) {
+        const outcome = await api(`/operations/${operationId}`).catch(() => null);
+        if (outcome?.committed) return this.load();
+        error.message = "Não foi possível confirmar a alteração. Atualize e confira o CRM.";
+      }
+      throw error;
+    }
+  },
   async photoUrl(photo, refresh = false) {
     if (photo.url && !photo.key) return photo.url;
     const cached = !refresh && photoCache.get(photo.id);

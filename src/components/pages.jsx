@@ -18,6 +18,7 @@ import {
   summarize,
   today,
   uid,
+  serviceNumber,
   visitsCsv,
 } from "../lib/domain.mjs";
 import Pagination from "./Pagination.jsx";
@@ -64,7 +65,7 @@ export function VisitsTable({ visits, onDetail, onDelete }) {
   const [search, setSearch] = useState("");
   const filtered = visits.filter((item) =>
     normalize(
-      `${item.workName} ${item.neighborhood} ${item.responsible} ${item.contractorName} ${item.architectName}`,
+      `${item.workName} ${item.neighborhood} ${item.responsible} ${item.contractorName} ${item.architectName} ${serviceNumber(item.serviceNumber)} ${item.serviceNumber || ""}`,
     ).includes(normalize(search)),
   );
   const currentPage = Math.min(
@@ -78,7 +79,7 @@ export function VisitsTable({ visits, onDetail, onDelete }) {
           <Icon name="search" size={18} />
           <input
             aria-label="Buscar visitas"
-            placeholder="Buscar obra, bairro ou contato…"
+            placeholder="Buscar OS, obra, bairro ou contato…"
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
@@ -121,6 +122,7 @@ export function VisitsTable({ visits, onDetail, onDelete }) {
                         >
                           {item.workName}
                         </button>
+                        {item.serviceNumber && <small>{serviceNumber(item.serviceNumber)}</small>}
                         <small>
                           {dateLabel(item.date)} ·{" "}
                           {item.responsible || "Contato a identificar"}
@@ -211,6 +213,7 @@ export function VisitDetail({ visit, onClose }) {
   return (
     <Modal title={visit.workName} onClose={onClose} wide>
       <div className="detail-top">
+        {visit.serviceNumber && <Badge tone="blue">{serviceNumber(visit.serviceNumber)}</Badge>}
         <Badge tone={visit.sold.length ? "success" : "blue"}>
           {STAGES[visit.stage]}
         </Badge>
@@ -795,11 +798,12 @@ function WorkForm({ initial, data, save, onClose }) {
   );
 }
 
-export function Works({ data, save, onVisit }) {
+export function Works({ data, save, onVisit, onDelete }) {
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
   const [type, setType] = useState("");
   const [editing, setEditing] = useState(null);
+  const [deleting, setDeleting] = useState(null);
   const works = data.works
     .filter(
       (item) =>
@@ -910,6 +914,9 @@ export function Works({ data, save, onVisit }) {
                       </span>
                     </div>
                     <div className="card-bottom">
+                      <button className="button text-button" onClick={() => setDeleting(item)} aria-label={`Excluir obra ${item.name}`}>
+                        Excluir
+                      </button>
                       <button
                         className="button text-button"
                         onClick={() =>
@@ -973,6 +980,9 @@ export function Works({ data, save, onVisit }) {
           onClose={() => setEditing(null)}
         />
       )}
+      {deleting && <DeleteRecord title="Excluir obra?" name={deleting.name}
+        description="A obra e suas programações sairão das listas. As visitas realizadas e vendas serão preservadas."
+        action={() => onDelete("works", deleting.id)} onClose={() => setDeleting(null)} />}
     </>
   );
 }
@@ -1154,13 +1164,15 @@ function CancelPlan({ plan, save, onClose }) {
     </Modal>
   );
 }
-export function Schedule({ data, userId, save, onVisit, canAssign = true }) {
+export function Schedule({ data, userId, save, onVisit, onDelete, onCrmAction, canAssign = true }) {
   const [date, setDate] = useState(today());
   const [period, setPeriod] = useState("month");
   const [user, setUser] = useState("");
   const [status, setStatus] = useState("");
   const [adding, setAdding] = useState(false);
   const [cancelling, setCancelling] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  const [deletingCrmReturn, setDeletingCrmReturn] = useState(null);
   const inPeriod = (value) => {
     if (period === "day") return value === date;
     if (period === "month") return value.slice(0, 7) === date.slice(0, 7);
@@ -1180,6 +1192,7 @@ export function Schedule({ data, userId, save, onVisit, canAssign = true }) {
     )
     .sort((a, b) => a.date.localeCompare(b.date));
   const isCrmReturn = (item) =>
+    !item.deleted &&
     item.responsibleId === userId &&
     item.nextDate &&
     !["won", "lost"].includes(item.stage) &&
@@ -1310,6 +1323,9 @@ export function Schedule({ data, userId, save, onVisit, canAssign = true }) {
                       </button>
                     </div>
                   )}
+                  <button className="button text-button small" onClick={() => setDeleting(item)} aria-label={`Excluir programação de ${item.workName}`}>
+                    Excluir
+                  </button>
                 </article>
               );
             })}
@@ -1364,6 +1380,9 @@ export function Schedule({ data, userId, save, onVisit, canAssign = true }) {
                   Registrar visita
                   <Icon name="arrow" size={15} />
                 </button>
+                <button className="button text-button small" onClick={() => setDeletingCrmReturn(item)} aria-label={`Excluir retorno de ${item.work.name}`}>
+                  Excluir retorno
+                </button>
               </article>
             ))}
           </div>
@@ -1385,6 +1404,14 @@ export function Schedule({ data, userId, save, onVisit, canAssign = true }) {
           onClose={() => setCancelling(null)}
         />
       )}
+      {deleting && <DeleteRecord title="Excluir programação?" name={`${deleting.workName} · ${dateLabel(deleting.date)}`}
+        description="Esta programação sairá da lista. Uma visita já realizada continuará no histórico."
+        action={() => onDelete("plans", deleting.id)} onClose={() => setDeleting(null)} />}
+      {deletingCrmReturn && <DeleteRecord title="Excluir retorno do CRM?" name={`${deletingCrmReturn.work.name} · ${dateLabel(deletingCrmReturn.nextDate)}`}
+        description="O retorno sairá da programação. O cartão e seu histórico continuarão no CRM."
+        action={() => onCrmAction(deletingCrmReturn.id, { type: "update", version: deletingCrmReturn.version,
+          stage: deletingCrmReturn.stage, responsibleId: deletingCrmReturn.responsibleId,
+          nextAction: "", nextDate: "", note: "" })} onClose={() => setDeletingCrmReturn(null)} />}
     </>
   );
 }
@@ -2141,6 +2168,7 @@ function DeleteRecord({
   description,
   save,
   update,
+  action,
   message,
   onClose,
 }) {
@@ -2151,7 +2179,8 @@ function DeleteRecord({
     setBusy(true);
     setError("");
     try {
-      await save(update, message);
+      if (action) await action();
+      else await save(update, message);
       onClose();
     } catch (cause) {
       setError(cause.message);

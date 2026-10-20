@@ -29,15 +29,21 @@ export default function Crm({
   actorId,
   account,
   onAction,
+  onCreate,
+  onLabels,
   onVisit,
   onNew,
 }) {
   const crm = data.crm || emptyCrm();
+  const labels = { ...CRM_STAGES, ...crm.stageLabels };
   const [query, setQuery] = useState("");
   const [responsible, setResponsible] = useState("");
   const [returns, setReturns] = useState("");
   const [mobileStage, setMobileStage] = useState("prospecting");
   const [dialog, setDialog] = useState(null);
+  const [addingCard, setAddingCard] = useState(false);
+  const [editingLabels, setEditingLabels] = useState(false);
+  const [deletingCard, setDeletingCard] = useState(null);
   const [drop, setDrop] = useState("");
   const [view, setView] = useState("board");
   const [closedStage, setClosedStage] = useState("");
@@ -45,6 +51,7 @@ export default function Crm({
   useEffect(() => setPage(1), [query, responsible, closedStage, view]);
   const filtered = crm.opportunities.filter(
     (item) =>
+      !item.deleted &&
       (!responsible || item.responsibleId === responsible) &&
       (!returns ||
         (returns === "overdue"
@@ -119,22 +126,24 @@ export default function Crm({
             Compartilhado com a equipe
           </span>
         </div>
-        <button className="button primary" onClick={onNew}>
-          <Icon name="plus" size={17} />
-          Registrar visita
-        </button>
+        <div className="crm-intro-actions">
+          <button className="button secondary" onClick={() => setAddingCard(true)}>Adicionar cartão</button>
+          {(!account || account.role === "admin") &&
+            <button className="button secondary" onClick={() => setEditingLabels(true)}>Renomear colunas</button>}
+          <button className="button primary" onClick={onNew}><Icon name="plus" size={17} />Registrar visita</button>
+        </div>
       </div>
       <div className="metrics crm-metrics">
         <Metric
           label="Oportunidades abertas"
-          value={crm.opportunities.filter(active).length}
+          value={crm.opportunities.filter((item) => !item.deleted && active(item)).length}
           detail="Obras em acompanhamento"
           icon="building"
         />
         <Metric
           label="Em negociação"
           value={
-            crm.opportunities.filter((item) => item.stage === "negotiating")
+            crm.opportunities.filter((item) => !item.deleted && item.stage === "negotiating")
               .length
           }
           detail="Conversas próximas do fechamento"
@@ -142,7 +151,7 @@ export default function Crm({
         />
         <Metric
           label="Retornos em atraso"
-          value={crm.opportunities.filter(overdue).length}
+          value={crm.opportunities.filter((item) => !item.deleted && overdue(item)).length}
           detail="Próximas ações que precisam de atenção"
           icon="clock"
         />
@@ -167,7 +176,7 @@ export default function Crm({
             onClick={() => showView("board")}
           >
             <Icon name="kanban" size={17} /> Em andamento
-            <span>{crm.opportunities.filter(active).length}</span>
+            <span>{crm.opportunities.filter((item) => !item.deleted && active(item)).length}</span>
           </button>
           <button
             aria-pressed={view === "closed"}
@@ -175,7 +184,7 @@ export default function Crm({
           >
             <Icon name="check" size={17} /> Encerradas
             <span>
-              {crm.opportunities.filter((item) => !active(item)).length}
+              {crm.opportunities.filter((item) => !item.deleted && !active(item)).length}
             </span>
           </button>
         </div>
@@ -208,8 +217,8 @@ export default function Crm({
               onChange={setClosedStage}
             >
               <option value="">Todos os resultados</option>
-              <option value="won">Venda realizada</option>
-              <option value="lost">Sem negócio</option>
+              <option value="won">{labels.won}</option>
+              <option value="lost">{labels.lost}</option>
             </Select>
           ) : (
             <Select
@@ -239,7 +248,7 @@ export default function Crm({
               role="group"
               aria-label="Etapas do CRM"
             >
-              {Object.entries(CRM_STAGES).map(([id, label]) => (
+              {Object.entries(labels).map(([id, label]) => (
                 <button
                   key={id}
                   className={mobileStage === id ? "active" : ""}
@@ -253,7 +262,7 @@ export default function Crm({
               ))}
             </div>
             <div className="crm-board">
-              {Object.entries(CRM_STAGES).map(([stage, label]) => {
+              {Object.entries(labels).map(([stage, label]) => {
                 const items = filtered
                   .filter((item) => item.stage === stage)
                   .sort(
@@ -451,6 +460,8 @@ export default function Crm({
                               >
                                 <Icon name="plus" size={18} />
                               </button>
+                              <button className="icon-button" aria-label={`Excluir cartão ${item.work.name}`}
+                                onClick={() => setDeletingCard(item)}><Icon name="close" size={17} /></button>
                             </footer>
                           </article>
                         ))
@@ -498,7 +509,7 @@ export default function Crm({
                   <article className="crm-archive-row" key={item.id}>
                     <div className="crm-archive-work">
                       <Badge tone={item.stage === "won" ? "success" : ""}>
-                        {CRM_STAGES[item.stage]}
+                        {labels[item.stage]}
                       </Badge>
                       <button
                         className="crm-card-title"
@@ -539,6 +550,7 @@ export default function Crm({
                     >
                       Ver histórico <Icon name="arrow" size={15} />
                     </button>
+                    <button className="button text-button" onClick={() => setDeletingCard(item)} aria-label={`Excluir cartão ${item.work.name}`}>Excluir cartão</button>
                   </article>
                 ))}
             </div>
@@ -572,10 +584,80 @@ export default function Crm({
           onClose={() => setDialog(null)}
           onVisit={() => visit(selected)}
           onMode={(type) => open(selected, type)}
+          labels={labels}
         />
       )}
+      {addingCard && <AddCrmCard works={data.works} onCreate={onCreate} onClose={() => setAddingCard(false)} />}
+      {editingLabels && <EditCrmLabels labels={labels} onSave={onLabels} onClose={() => setEditingLabels(false)} />}
+      {deletingCard && <DeleteCrmCard item={deletingCard} onAction={onAction} onClose={() => setDeletingCard(null)} />}
     </div>
   );
+}
+
+function AddCrmCard({ works, onCreate, onClose }) {
+  const [workId, setWorkId] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!workId) return setError("Selecione uma obra cadastrada.");
+    setBusy(true);
+    setError("");
+    try { await onCreate(workId); onClose(); }
+    catch (cause) { setError(cause.message); }
+    finally { setBusy(false); }
+  };
+  return <Modal title="Adicionar cartão ao CRM" onClose={onClose}>
+    <form onSubmit={submit}>
+      <p>Selecione uma obra sua. O cartão ficará disponível para a equipe, sem compartilhar anotações ou fotos privadas.</p>
+      <Select label="Obra" value={workId} onChange={setWorkId} required>
+        <option value="">Selecione uma obra</option>
+        {works.map((work) => <option key={work.id} value={work.id}>{work.name} · {work.neighborhood}</option>)}
+      </Select>
+      {error && <p className="error" role="alert">{error}</p>}
+      <footer className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancelar</button>
+        <button className="button primary" disabled={busy}>{busy ? "Salvando…" : "Adicionar cartão"}</button></footer>
+    </form>
+  </Modal>;
+}
+function EditCrmLabels({ labels, onSave, onClose }) {
+  const [draft, setDraft] = useState(labels);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try { await onSave(draft); onClose(); }
+    catch (cause) { setError(cause.message); }
+    finally { setBusy(false); }
+  };
+  return <Modal title="Renomear colunas do CRM" onClose={onClose}>
+    <form onSubmit={submit}>
+      {Object.keys(CRM_STAGES).map((key) => <Field key={key} label={CRM_STAGES[key]} value={draft[key]}
+        maxLength={35} required onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} />)}
+      {error && <p className="error" role="alert">{error}</p>}
+      <footer className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancelar</button>
+        <button className="button primary" disabled={busy}>{busy ? "Salvando…" : "Salvar nomes"}</button></footer>
+    </form>
+  </Modal>;
+}
+function DeleteCrmCard({ item, onAction, onClose }) {
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setBusy(true);
+    setError("");
+    try { await onAction(item.id, { type: "delete", version: item.version }); onClose(); }
+    catch (cause) { setError(cause.message); }
+    finally { setBusy(false); }
+  };
+  return <Modal title="Excluir cartão do CRM?" onClose={onClose}>
+    <p><strong>{item.work.name}</strong> sairá do quadro. Visitas, vendas e histórico serão preservados.</p>
+    {error && <p className="error" role="alert">{error}</p>}
+    <footer className="modal-actions"><button className="button secondary" onClick={onClose}>Cancelar</button>
+      <button className="button primary" disabled={busy} onClick={submit}>{busy ? "Excluindo…" : "Excluir cartão"}</button></footer>
+  </Modal>;
 }
 
 function CrmDialog({
@@ -589,6 +671,7 @@ function CrmDialog({
   onClose,
   onVisit,
   onMode,
+  labels,
 }) {
   const [version, setVersion] = useState(initial.version);
   const [stage, setStage] = useState(initial.stage);
@@ -657,7 +740,7 @@ function CrmDialog({
     <Modal title={item.work.name} onClose={busy ? () => {} : onClose} wide>
       <div className="crm-detail-summary">
         <div>
-          <Badge tone="blue">{CRM_STAGES[item.stage]}</Badge>
+          <Badge tone="blue">{labels[item.stage]}</Badge>
           <p>{addressLabel(item.work)}</p>
           {item.work.responsible && (
             <p>
@@ -773,7 +856,7 @@ function CrmDialog({
             <div className="crm-stale" role="alert">
               <p>
                 A equipe atualizou esta oportunidade. Etapa atual:{" "}
-                <strong>{CRM_STAGES[item.stage]}</strong>. Seus campos foram
+                <strong>{labels[item.stage]}</strong>. Seus campos foram
                 mantidos. Responsável atual: {person(item.responsibleId)}.
                 Próxima ação atual: {item.nextAction || "Não informada"}
                 {item.nextDate ? ` · ${dateLabel(item.nextDate)}` : ""}.
@@ -795,7 +878,7 @@ function CrmDialog({
                   value={stage}
                   onChange={setStage}
                 >
-                  {Object.entries(CRM_STAGES)
+                  {Object.entries(labels)
                     .filter(([key]) => !["won", "lost"].includes(key))
                     .map(([id, label]) => (
                       <option key={id} value={id}>
@@ -963,7 +1046,7 @@ function CrmDialog({
               className={`crm-timeline-dot ${event.type === "sale" ? "sale" : ""}`}
             />
             <div>
-              <strong>{eventLabel(event)}</strong>
+              <strong>{eventLabel(event, labels)}</strong>
               <small>
                 {event.actorName} · {new Date(event.at).toLocaleString("pt-BR")}
               </small>
@@ -994,12 +1077,14 @@ function CrmDialog({
     </Modal>
   );
 }
-function eventLabel(event) {
+function eventLabel(event, labels = CRM_STAGES) {
   return (
     {
       created: "Oportunidade aberta",
       visit: "Visita registrada",
       visit_deleted: "Visita excluída",
+      deleted: "Cartão ocultado",
+      restored: "Cartão restaurado",
       sale: "Venda registrada",
       note: "Contato / ação realizada",
       lost: "Encerrada sem negócio",
@@ -1008,7 +1093,7 @@ function eventLabel(event) {
       updated:
         event.from === event.to
           ? "Próximo passo atualizado"
-          : `${CRM_STAGES[event.from]} → ${CRM_STAGES[event.to]}`,
+          : `${labels[event.from]} → ${labels[event.to]}`,
     }[event.type] || "Atualização"
   );
 }

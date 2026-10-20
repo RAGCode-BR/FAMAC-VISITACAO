@@ -18,6 +18,7 @@ export const TEAM = [
   { id: "claudionor", name: "Claudionor", initials: "CL" },
   { id: "charles", name: "Charles", initials: "CH" },
   { id: "celso", name: "Celso", initials: "CE" },
+  { id: "recepcao", name: "Recepção", initials: "RE" },
 ];
 export const STAGES = {
   prospecting: "Prospecção",
@@ -106,6 +107,8 @@ export function deleteContact(data, id) {
   };
 }
 export const uid = () => crypto.randomUUID();
+export const serviceNumber = (number) =>
+  number ? `OS-${String(number).padStart(6, "0")}` : "";
 export const person = (id) =>
   TEAM.find((item) => item.id === id)?.name || "Não informado";
 export const addressLabel = (item) =>
@@ -210,7 +213,7 @@ export function recordVisit(
     ...(data.crm?.sales.find((sale) => sale.id === draft.crmSaleId)?.products ||
       []),
   ]);
-  const existing = data.works.find((item) => item.id === draft.workId);
+  const existing = data.works.find((item) => item.id === draft.workId && !item.deleted);
   const sharedWork = data.crm?.opportunities.find(
     (item) => item.id === draft.crmOpportunityId,
   )?.work;

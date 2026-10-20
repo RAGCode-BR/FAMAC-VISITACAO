@@ -20,7 +20,33 @@ export const emptyCrm = () => ({
   activities: [],
   sales: [],
   visitLinks: [],
+  stageLabels: { ...CRM_STAGES },
 });
+export function createCrmOpportunity(current, work, actor, at = new Date().toISOString()) {
+  const crm = structuredClone(current || emptyCrm());
+  const workKey = crmWorkKey(work);
+  ensure(workKey && normalize(work.street) && normalize(work.city), "Informe o endereço da obra.");
+  const existing = crm.opportunities.find((item) => item.workKey === workKey || item.primaryWorkId === work.id);
+  if (existing) {
+    ensure(existing.deleted, "Esta obra já possui um cartão no CRM.", 409);
+    existing.deleted = false;
+    existing.version++;
+    existing.updatedAt = at;
+    activity(crm, existing, actor, "restored", {}, at);
+    return crm;
+  }
+  const item = {
+    id: uid(), primaryWorkId: work.id, workKey, work: crmWorkSnapshot(work),
+    stage: "prospecting", responsibleId: actor.teamId,
+    prospectorId: actor.teamId, products: [], pendingProducts: [],
+    completedProducts: [], discardedProducts: [], cycle: 1,
+    nextAction: "", nextDate: "", version: 1,
+    createdAt: at, updatedAt: at, lastVisitDate: "",
+  };
+  crm.opportunities.push(item);
+  activity(crm, item, actor, "created", { note: "Oportunidade aberta a partir da obra cadastrada." }, at);
+  return crm;
+}
 
 // O histórico é decrescente. Visita e venda do mesmo salvamento aparecem
 // como visita → venda, sem alterar a sequência persistida nem vendas anteriores.
@@ -251,6 +277,10 @@ export function recordCrmVisit(
     !requestedId || opportunity,
     "A oportunidade selecionada não está disponível. Abra o CRM e confira a obra.",
   );
+  if (opportunity?.deleted) {
+    opportunity.deleted = false;
+    activity(crm, opportunity, actor, "restored", { note: "Oportunidade reaberta por nova visita." }, at);
+  }
   const snapshot = crmWorkSnapshot(work, visit);
   if (!opportunity) {
     opportunity = {
@@ -463,6 +493,7 @@ export function applyCrmAction(
   const crm = structuredClone(current || emptyCrm());
   const item = crm.opportunities.find((row) => row.id === opportunityId);
   ensure(item, "Oportunidade não encontrada.", 404);
+  ensure(!item.deleted, "Este cartão foi excluído.", 404);
   ensure(
     Number.isSafeInteger(input.version) && input.version === item.version,
     "Esta oportunidade foi atualizada por outra pessoa. Confira os dados atuais antes de salvar novamente.",
@@ -470,7 +501,10 @@ export function applyCrmAction(
   );
   const note = text(input.note || "");
   const from = item.stage;
-  if (input.type === "sale") {
+  if (input.type === "delete") {
+    item.deleted = true;
+    activity(crm, item, actor, "deleted", {}, at);
+  } else if (input.type === "sale") {
     ensure(
       !closed(item),
       "Reabra a oportunidade antes de registrar outra venda.",

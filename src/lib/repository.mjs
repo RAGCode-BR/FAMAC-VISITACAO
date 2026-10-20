@@ -3,6 +3,8 @@ import { cloudEnabled } from "./auth.mjs";
 import { cloudRepository } from "./cloud-repository.mjs";
 import {
   applyCrmAction,
+  createCrmOpportunity,
+  CRM_STAGES,
   markCrmVisitDeleted,
   reconcileLocalCrm,
 } from "./crm.mjs";
@@ -54,6 +56,8 @@ const localRepository = {
     });
   },
   async save(data) {
+    let nextNumber = data.nextServiceNumber || Math.max(0, ...data.visits.map((visit) => Number(visit.serviceNumber) || 0)) + 1;
+    data = { ...data, visits: data.visits.map((visit) => visit.serviceNumber ? visit : { ...visit, serviceNumber: nextNumber++ }), nextServiceNumber: nextNumber };
     data = reconcileLocalCrm(data, {
       role: "admin",
       teamId: actorTeamId,
@@ -113,6 +117,27 @@ export const repository = cloudEnabled
             return next;
           }),
         });
+      },
+      async deleteRecord(kind, id) {
+        if (!["works", "plans"].includes(kind)) throw new Error("Registro inválido.");
+        const current = await localRepository.load();
+        if (!current[kind].some((item) => item.id === id)) throw new Error("Registro não encontrado.");
+        return localRepository.save({
+          ...current,
+          [kind]: current[kind].filter((item) => item.id !== id),
+          ...(kind === "works" ? { plans: current.plans.filter((item) => item.workId !== id) } : {}),
+        });
+      },
+      async createCrmOpportunity(workId) {
+        const current = await localRepository.load();
+        const work = current.works.find((item) => item.id === workId);
+        if (!work) throw new Error("Obra não encontrada.");
+        const crm = createCrmOpportunity(current.crm, work, { role: "admin", teamId: actorTeamId, name: person(actorTeamId) });
+        return localRepository.save({ ...current, crm });
+      },
+      async updateCrmStageLabels(labels) {
+        const current = await localRepository.load();
+        return localRepository.save({ ...current, crm: { ...current.crm, stageLabels: { ...CRM_STAGES, ...labels } } });
       },
       clear() {},
       async photoUrl(photo) {
