@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   CRM_STAGES,
   crmStageOrder,
@@ -52,6 +52,8 @@ export default function Crm({
   const [deletingColumn, setDeletingColumn] = useState(null);
   const [deletingCard, setDeletingCard] = useState(null);
   const [drop, setDrop] = useState("");
+  const [moveError, setMoveError] = useState("");
+  const moving = useRef(false);
   const [view, setView] = useState("board");
   const [closedStage, setClosedStage] = useState("");
   const [page, setPage] = useState(1);
@@ -107,25 +109,35 @@ export default function Crm({
     setDialog(null);
     onVisit(item);
   };
-  const dropped = (event, stage) => {
+  const dropped = async (event, stage) => {
     event.preventDefault();
     setDrop("");
+    setMoveError("");
+    if (moving.current) return;
     try {
       const source = JSON.parse(
         event.dataTransfer.getData("application/x-famac-crm"),
       );
       const item = crm.opportunities.find((row) => row.id === source.id);
       if (!item || item.stage === stage) return;
-      const type =
-        stage === "won"
-          ? "sale"
-          : stage === "lost"
-            ? "lose"
-            : active(item)
-              ? "update"
-              : "reopen";
-      open(item, type, stage, source.version);
-    } catch {}
+      if (!active(item) || !active({ stage })) {
+        setMoveError("Para concluir ou reabrir uma oportunidade, abra o cartão e registre os dados do fechamento.");
+        return;
+      }
+      moving.current = true;
+      await onAction(item.id, {
+        type: "update",
+        version: source.version,
+        stage,
+        responsibleId: item.responsibleId,
+        nextAction: item.nextAction,
+        nextDate: item.nextDate,
+      });
+    } catch (error) {
+      setMoveError(error.message || "Não foi possível mover o cartão.");
+    } finally {
+      moving.current = false;
+    }
   };
   return (
     <div className="crm-page">
@@ -254,6 +266,7 @@ export default function Crm({
                 Abra um cartão para atualizar ou arraste entre as etapas.
               </small>
             </div>
+            {moveError && <p className="error" role="alert">{moveError}</p>}
             <div
               className="crm-mobile-tabs"
               role="group"
@@ -617,6 +630,7 @@ export default function Crm({
         onSave={onLabels} onClose={() => setEditingLabel(null)} />}
       {deletingColumn && <DeleteCrmColumn stage={deletingColumn} label={labels[deletingColumn]}
         count={crm.opportunities.filter((item) => !item.deleted && item.stage === deletingColumn).length}
+        destination={active({ stage: deletingColumn }) ? labels[activeStageIds.find((id) => id !== deletingColumn)] : ""}
         onDelete={onColumns} onClose={() => setDeletingColumn(null)} />}
       {deletingCard && <DeleteCrmCard item={deletingCard} onAction={onAction} onClose={() => setDeletingCard(null)} />}
     </div>
@@ -675,7 +689,7 @@ function AddCrmColumn({ onSave, onClose }) {
     </form>
   </Modal>;
 }
-function DeleteCrmColumn({ stage, label, count, onDelete, onClose }) {
+function DeleteCrmColumn({ stage, label, count, destination, onDelete, onClose }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async () => {
@@ -686,12 +700,15 @@ function DeleteCrmColumn({ stage, label, count, onDelete, onClose }) {
     finally { setBusy(false); }
   };
   return <Modal title={`Excluir coluna ${label}?`} onClose={onClose}>
-    <p>{count ? `Esta coluna tem ${count} ${count === 1 ? "cartão" : "cartões"}. Mova ou exclua todos antes de apagar a coluna.`
+    <p>{count
+      ? destination
+        ? `Esta coluna tem ${count} ${count === 1 ? "cartão" : "cartões"}. Ao excluí-la, ${count === 1 ? "ele será movido" : "eles serão movidos"} para ${destination}. O histórico será preservado.`
+        : `Esta coluna tem ${count} ${count === 1 ? "cartão" : "cartões"}. Eles continuarão na lista de encerradas, com o histórico preservado.`
       : "A coluna vazia será removida do quadro. O histórico das oportunidades será preservado."}</p>
     {error && <p className="error" role="alert">{error}</p>}
     <footer className="modal-actions">
-      <button className="button secondary" disabled={busy} onClick={onClose}>{count ? "Entendi" : "Cancelar"}</button>
-      {!count && <button className="button primary" disabled={busy} onClick={submit}>{busy ? "Excluindo…" : "Excluir coluna"}</button>}
+      <button className="button secondary" disabled={busy} onClick={onClose}>Cancelar</button>
+      <button className="button primary" disabled={busy} onClick={submit}>{busy ? "Excluindo…" : "Excluir coluna"}</button>
     </footer>
   </Modal>;
 }

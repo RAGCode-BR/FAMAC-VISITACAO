@@ -28,7 +28,7 @@ export const emptyCrm = () => ({
   stageLabels: { ...CRM_STAGES },
   stageOrder: [...DEFAULT_CRM_STAGE_ORDER],
 });
-export function changeCrmColumns(current, input) {
+export function changeCrmColumns(current, input, actor = { name: "Administração" }) {
   const crm = structuredClone(current || emptyCrm());
   const order = crmStageOrder(crm);
   const labels = crm.stageLabels || { ...CRM_STAGES };
@@ -44,10 +44,25 @@ export function changeCrmColumns(current, input) {
     crm.stageOrder.splice(closedIndex < 0 ? crm.stageOrder.length : closedIndex, 0, id);
   } else if (input.type === "delete") {
     ensure(order.includes(input.stage), "Coluna não encontrada.", 404);
-    ensure(!crm.opportunities.some((item) => !item.deleted && item.stage === input.stage),
-      "Esta coluna tem cartões. Mova ou exclua os cartões antes de apagar a coluna.", 409);
     ensure(["won", "lost"].includes(input.stage) || crmActiveStageIds(crm).length > 1,
       "Mantenha ao menos uma coluna em andamento.");
+    const destination = crmActiveStageIds(crm).find((stage) => stage !== input.stage);
+    const at = new Date().toISOString();
+    for (const item of crm.opportunities.filter((row) => !row.deleted && row.stage === input.stage && !closed(row))) {
+      const from = item.stage;
+      item.stage = destination;
+      item.version++;
+      item.updatedAt = at;
+      activity(crm, item, actor, "updated", {
+        from,
+        to: destination,
+        previousResponsibleId: item.responsibleId,
+        responsibleId: item.responsibleId,
+        nextAction: item.nextAction,
+        nextDate: item.nextDate,
+        note: `Coluna ${labels[from]} excluída. Cartão movido para ${labels[destination]}.`,
+      }, at);
+    }
     crm.stageOrder = order.filter((stage) => stage !== input.stage);
   } else ensure(false, "Ação de coluna inválida.");
   return crm;

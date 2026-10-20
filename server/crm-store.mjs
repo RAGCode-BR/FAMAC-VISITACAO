@@ -175,7 +175,8 @@ export function installCrmRoutes(app, pool, readState) {
         if (repeated.rows[0].auth_id !== member.authId) fail("Operação inválida.", 403);
       } else {
         const before = await readCrm(db);
-        const after = changeCrmColumns(before, action);
+        const after = changeCrmColumns(before, action, member);
+        await persistCrm(db, before, after);
         await db.query("UPDATE famac.crm_settings SET stage_labels=$1,stage_order=$2 WHERE singleton=true",
           [after.stageLabels, JSON.stringify(after.stageOrder)]);
         await db.query("UPDATE famac.revision SET value=value+1 WHERE singleton=true");

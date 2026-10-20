@@ -138,7 +138,14 @@ export const repository = cloudEnabled
       },
       async changeCrmColumns(action) {
         const current = await localRepository.load();
-        return localRepository.save({ ...current, crm: changeCrmColumns(current.crm, action) });
+        return localRepository.save({
+          ...current,
+          crm: changeCrmColumns(current.crm, action, {
+            role: "admin",
+            teamId: actorTeamId,
+            name: person(actorTeamId),
+          }),
+        });
       },
       async updateCrmStageLabels(labels) {
         const current = await localRepository.load();

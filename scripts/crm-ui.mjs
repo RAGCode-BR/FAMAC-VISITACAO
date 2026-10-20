@@ -285,19 +285,8 @@ try {
     .dragTo(
       page.getByRole("region", { name: "Aguardando retorno", exact: true }),
     );
-  await modal.waitFor();
-  assert.equal(
-    await modal.getByLabel("Etapa da oportunidade").inputValue(),
-    "waiting",
-  );
-  await submit();
-  assert.equal(
-    await page
-      .locator(".crm-waiting .crm-card")
-      .filter({ hasText: names[0] })
-      .count(),
-    1,
-  );
+  await page.locator(".crm-waiting .crm-card").filter({ hasText: names[0] }).waitFor();
+  assert.equal(await modal.count(), 0);
   for (const width of [390, 360]) {
     await page.setViewportSize({ width, height: 850 });
     await fits();
@@ -336,6 +325,22 @@ try {
     });
     await page.getByRole("button", { name: /^Em andamento/ }).click();
   }
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.getByRole("button", { name: "Adicionar coluna" }).click();
+  await modal.getByLabel("Nome da coluna").fill("Coluna teste");
+  await modal.getByRole("button", { name: "Adicionar coluna" }).click();
+  await modal.waitFor({ state: "hidden" });
+  await page.locator(".crm-waiting .crm-card").filter({ hasText: names[0] })
+    .dragTo(page.getByRole("region", { name: "Coluna teste", exact: true }));
+  await page.getByRole("region", { name: "Coluna teste", exact: true })
+    .locator(".crm-card").filter({ hasText: names[0] }).waitFor();
+  assert.equal(await modal.count(), 0);
+  await page.getByRole("button", { name: "Excluir coluna Coluna teste" }).click();
+  await modal.getByText(/será movido para Em prospecção/).waitFor();
+  await modal.getByRole("button", { name: "Excluir coluna", exact: true }).click();
+  await modal.waitFor({ state: "hidden" });
+  assert.equal(await page.getByRole("region", { name: "Coluna teste", exact: true }).count(), 0);
+  await page.locator(".crm-prospecting .crm-card").filter({ hasText: names[0] }).waitFor();
   await nav("Relatórios");
   await page
     .locator(".reports-page")
