@@ -65,8 +65,11 @@ export const cloudRepository = {
       throw error;
     }
   },
-  async createCrmOpportunity(workId) {
-    return this.crmRequest("/crm/opportunities", "POST", { workId, actorTeamId });
+  async createCrmOpportunity(workId, stage) {
+    return this.crmRequest("/crm/opportunities", "POST", { workId, stage, actorTeamId });
+  },
+  async changeCrmColumns(action) {
+    return this.crmRequest("/crm/columns", "POST", { action });
   },
   async updateCrmStageLabels(labels) {
     return this.crmRequest("/crm/stage-labels", "PUT", { labels });

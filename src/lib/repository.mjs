@@ -4,6 +4,7 @@ import { cloudRepository } from "./cloud-repository.mjs";
 import {
   applyCrmAction,
   createCrmOpportunity,
+  changeCrmColumns,
   CRM_STAGES,
   markCrmVisitDeleted,
   reconcileLocalCrm,
@@ -128,12 +129,16 @@ export const repository = cloudEnabled
           ...(kind === "works" ? { plans: current.plans.filter((item) => item.workId !== id) } : {}),
         });
       },
-      async createCrmOpportunity(workId) {
+      async createCrmOpportunity(workId, stage) {
         const current = await localRepository.load();
         const work = current.works.find((item) => item.id === workId);
         if (!work) throw new Error("Obra não encontrada.");
-        const crm = createCrmOpportunity(current.crm, work, { role: "admin", teamId: actorTeamId, name: person(actorTeamId) });
+        const crm = createCrmOpportunity(current.crm, work, { role: "admin", teamId: actorTeamId, name: person(actorTeamId) }, { stage });
         return localRepository.save({ ...current, crm });
+      },
+      async changeCrmColumns(action) {
+        const current = await localRepository.load();
+        return localRepository.save({ ...current, crm: changeCrmColumns(current.crm, action) });
       },
       async updateCrmStageLabels(labels) {
         const current = await localRepository.load();

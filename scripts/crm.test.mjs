@@ -18,7 +18,28 @@ import {
   crmTimeline,
   markCrmVisitDeleted,
   createCrmOpportunity,
+  changeCrmColumns,
+  crmActiveStageIds,
 } from "../src/lib/crm.mjs";
+
+test("colunas novas recebem cartões e só podem ser excluídas quando vazias", () => {
+  const actor = { role: "admin", teamId: "claudionor", name: "Administrador" };
+  const work = { id: crypto.randomUUID(), name: "Hotel", street: "Rua A", number: "10", neighborhood: "Centro", city: "Sorriso", state: "MT" };
+  const added = changeCrmColumns(emptyCrm(), { type: "add", name: "Aguardando proposta" });
+  const stage = added.stageOrder.find((id) => id.startsWith("custom-"));
+  assert.equal(added.stageLabels[stage], "Aguardando proposta");
+  assert.ok(crmActiveStageIds(added).includes(stage));
+  assert.throws(() => changeCrmColumns(added, { type: "add", name: "aguardando proposta" }), /já existe/i);
+  const withCard = createCrmOpportunity(added, work, actor, { stage });
+  assert.equal(withCard.opportunities[0].stage, stage);
+  assert.throws(() => changeCrmColumns(withCard, { type: "delete", stage }), /tem cartões/);
+  const moved = applyCrmAction(withCard, withCard.opportunities[0].id,
+    { type: "update", version: 1, stage: "prospecting", responsibleId: "claudionor", nextAction: "", nextDate: "" }, actor, []);
+  const removed = changeCrmColumns(moved, { type: "delete", stage });
+  assert.ok(!removed.stageOrder.includes(stage));
+  assert.equal(removed.opportunities[0].stage, "prospecting");
+  assert.equal(removed.stageLabels[stage], "Aguardando proposta");
+});
 
 test("cartão manual pode ser ocultado e reaberto sem perder vendas e histórico", () => {
   const work = { id: crypto.randomUUID(), name: "Hotel", street: "Rua A", number: "10", complement: "", neighborhood: "Centro", city: "Sorriso", state: "MT", type: "Comercial" };

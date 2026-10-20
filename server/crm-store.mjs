@@ -2,11 +2,12 @@ import { isDeepStrictEqual } from "node:util";
 import {
   applyCrmAction,
   createCrmOpportunity,
+  changeCrmColumns,
   emptyCrm,
   markCrmVisitDeleted,
   recordCrmVisit,
 } from "../src/lib/crm.mjs";
-import { person, productNames } from "../src/lib/domain.mjs";
+import { normalize, person, productNames } from "../src/lib/domain.mjs";
 import { validId, fail, requireOwner } from "./policy.mjs";
 
 export async function readCrm(db) {
@@ -25,7 +26,9 @@ export async function readCrm(db) {
   }
   crm.opportunities.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   crm.activities.sort((a, b) => b.at.localeCompare(a.at));
-  crm.stageLabels = (await db.query("SELECT stage_labels FROM famac.crm_settings WHERE singleton=true")).rows[0]?.stage_labels || crm.stageLabels;
+  const settings = (await db.query("SELECT stage_labels,stage_order FROM famac.crm_settings WHERE singleton=true")).rows[0];
+  crm.stageLabels = settings?.stage_labels || crm.stageLabels;
+  crm.stageOrder = settings?.stage_order || crm.stageOrder;
   return crm;
 }
 async function persistCrm(db, before, after) {
@@ -131,7 +134,7 @@ export async function backfillCrm(db) {
 export function installCrmRoutes(app, pool, readState) {
   app.post("/crm/opportunities", async (c) => {
     const member = c.get("member");
-    const { workId, actorTeamId, operationId } = await c.req.json();
+    const { workId, stage, actorTeamId, operationId } = await c.req.json();
     if (!validId(workId) || !validId(operationId)) fail("Operação do CRM inválida.");
     requireOwner(member, actorTeamId);
     const db = await pool.connect();
@@ -146,8 +149,35 @@ export function installCrmRoutes(app, pool, readState) {
         if (!work.rowCount || work.rows[0].payload.deleted) fail("Obra indisponível.", 404);
         requireOwner(member, work.rows[0].owner_id);
         const before = await readCrm(db);
-        const after = createCrmOpportunity(before, work.rows[0].payload, { ...member, teamId: work.rows[0].owner_id });
+        const after = createCrmOpportunity(before, work.rows[0].payload, { ...member, teamId: work.rows[0].owner_id }, { stage });
         await persistCrm(db, before, after);
+        await db.query("UPDATE famac.revision SET value=value+1 WHERE singleton=true");
+        await db.query("INSERT INTO famac.operations(id,auth_id) VALUES ($1,$2)", [operationId, member.authId]);
+      }
+      const state = await readState(db, member);
+      await db.query("COMMIT");
+      return c.json(state);
+    } catch (error) { await db.query("ROLLBACK"); throw error; }
+    finally { db.release(); }
+  });
+  app.post("/crm/columns", async (c) => {
+    const member = c.get("member");
+    if (member.role !== "admin") fail("Somente a administração pode gerenciar colunas.", 403);
+    const { action, operationId } = await c.req.json();
+    if (!validId(operationId) || !action || !["add", "delete"].includes(action.type))
+      fail("Operação de coluna inválida.");
+    const db = await pool.connect();
+    try {
+      await db.query("BEGIN");
+      await db.query("SELECT value FROM famac.revision WHERE singleton=true FOR UPDATE");
+      const repeated = await db.query("SELECT auth_id FROM famac.operations WHERE id=$1", [operationId]);
+      if (repeated.rowCount) {
+        if (repeated.rows[0].auth_id !== member.authId) fail("Operação inválida.", 403);
+      } else {
+        const before = await readCrm(db);
+        const after = changeCrmColumns(before, action);
+        await db.query("UPDATE famac.crm_settings SET stage_labels=$1,stage_order=$2 WHERE singleton=true",
+          [after.stageLabels, JSON.stringify(after.stageOrder)]);
         await db.query("UPDATE famac.revision SET value=value+1 WHERE singleton=true");
         await db.query("INSERT INTO famac.operations(id,auth_id) VALUES ($1,$2)", [operationId, member.authId]);
       }
@@ -161,11 +191,8 @@ export function installCrmRoutes(app, pool, readState) {
     const member = c.get("member");
     if (member.role !== "admin") fail("Somente a administração pode renomear colunas.", 403);
     const { labels, operationId } = await c.req.json();
-    if (!validId(operationId) || !labels || typeof labels !== "object" || Array.isArray(labels) ||
-        Object.keys(labels).sort().join(",") !== "lost,negotiating,prospecting,waiting,won" ||
-        Object.values(labels).some((value) => typeof value !== "string" || !value.trim() || value.trim().length > 35) ||
-        new Set(Object.values(labels).map((value) => value.trim().toLocaleLowerCase("pt-BR"))).size !== 5)
-      fail("Informe cinco nomes diferentes, com até 35 caracteres.");
+    if (!validId(operationId) || !labels || typeof labels !== "object" || Array.isArray(labels))
+      fail("Nomes de colunas inválidos.");
     const db = await pool.connect();
     try {
       await db.query("BEGIN");
@@ -174,6 +201,12 @@ export function installCrmRoutes(app, pool, readState) {
       if (repeated.rowCount) {
         if (repeated.rows[0].auth_id !== member.authId) fail("Operação inválida.", 403);
       } else {
+        const settings = (await db.query("SELECT stage_labels,stage_order FROM famac.crm_settings WHERE singleton=true FOR UPDATE")).rows[0];
+        if (Object.keys(labels).sort().join(",") !== Object.keys(settings.stage_labels).sort().join(","))
+          fail("As colunas mudaram. Atualize o CRM e tente novamente.", 409);
+        if (Object.values(labels).some((value) => typeof value !== "string" || !value.trim() || value.trim().length > 35) ||
+          new Set(settings.stage_order.map((id) => normalize(labels[id]))).size !== settings.stage_order.length)
+          fail("Informe nomes diferentes, com até 35 caracteres.");
         await db.query("UPDATE famac.crm_settings SET stage_labels=$1 WHERE singleton=true", [Object.fromEntries(Object.entries(labels).map(([key,value]) => [key,value.trim()]))]);
         await db.query("UPDATE famac.revision SET value=value+1 WHERE singleton=true");
         await db.query("INSERT INTO famac.operations(id,auth_id) VALUES ($1,$2)", [operationId, member.authId]);

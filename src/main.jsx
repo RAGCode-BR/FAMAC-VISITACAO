@@ -285,8 +285,11 @@ function App({ account, onLogout }) {
   );
   const deleteRecord = useCallback((kind, id) =>
     persist(() => repository.deleteRecord(kind, id), kind === "works" ? "Obra excluída." : "Programação excluída."), [persist]);
-  const createCrmOpportunity = useCallback((workId) =>
-    persist(() => repository.createCrmOpportunity(workId), "Cartão criado no CRM."), [persist]);
+  const createCrmOpportunity = useCallback((workId, stage) =>
+    persist(() => repository.createCrmOpportunity(workId, stage), "Cartão criado no CRM."), [persist]);
+  const changeCrmColumns = useCallback((action) =>
+    persist(() => repository.changeCrmColumns(action),
+      action.type === "add" ? "Coluna adicionada." : "Coluna excluída."), [persist]);
   const updateCrmStageLabels = useCallback((labels) =>
     persist(() => repository.updateCrmStageLabels(labels), "Colunas atualizadas."), [persist]);
   const deleteVisit = async () => {
@@ -580,6 +583,7 @@ function App({ account, onLogout }) {
               account={account}
               onAction={crmAction}
               onCreate={createCrmOpportunity}
+              onColumns={changeCrmColumns}
               onLabels={updateCrmStageLabels}
               onVisit={(opportunity) =>
                 startVisit({ crmOpportunityId: opportunity.id, userId })

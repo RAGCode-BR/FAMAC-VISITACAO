@@ -203,7 +203,7 @@
 }
 .crm-board {
   display: grid;
-  grid-template-columns: repeat(5, minmax(200px, 1fr));
+  grid-template-columns: repeat(var(--crm-columns, 5), minmax(200px, 1fr));
   gap: 14px;
   overflow-x: auto;
   padding: 20px;
@@ -276,6 +276,11 @@
 .crm-column-edit:focus-visible {
   background: #dce6f4;
   color: #1c3157;
+}
+.crm-column-delete:hover,
+.crm-column-delete:focus-visible {
+  background: #f9e4e7;
+  color: #bd2238;
 }
 .crm-column-heading b {
   font-size: 11px;

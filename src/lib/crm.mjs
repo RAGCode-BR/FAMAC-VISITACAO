@@ -15,21 +15,63 @@ export const CRM_STAGES = {
   won: "Venda realizada",
   lost: "Sem negócio",
 };
+export const DEFAULT_CRM_STAGE_ORDER = Object.keys(CRM_STAGES);
+export const crmStageOrder = (crm) => crm?.stageOrder || DEFAULT_CRM_STAGE_ORDER;
+export const crmActiveStageIds = (crm) =>
+  crmStageOrder(crm).filter((stage) => !["won", "lost"].includes(stage));
+const firstActiveStage = (crm) => crmActiveStageIds(crm)[0];
 export const emptyCrm = () => ({
   opportunities: [],
   activities: [],
   sales: [],
   visitLinks: [],
   stageLabels: { ...CRM_STAGES },
+  stageOrder: [...DEFAULT_CRM_STAGE_ORDER],
 });
-export function createCrmOpportunity(current, work, actor, at = new Date().toISOString()) {
+export function changeCrmColumns(current, input) {
   const crm = structuredClone(current || emptyCrm());
+  const order = crmStageOrder(crm);
+  const labels = crm.stageLabels || { ...CRM_STAGES };
+  if (input.type === "add") {
+    const name = text(input.name, 35);
+    ensure(name, "Informe o nome da coluna.");
+    ensure(order.length < 12, "O CRM permite até 12 colunas.");
+    ensure(!order.some((id) => normalize(labels[id]) === normalize(name)), "Já existe uma coluna com esse nome.", 409);
+    const id = `custom-${uid()}`;
+    crm.stageLabels = { ...labels, [id]: name };
+    crm.stageOrder = [...order];
+    const closedIndex = crm.stageOrder.findIndex((stage) => ["won", "lost"].includes(stage));
+    crm.stageOrder.splice(closedIndex < 0 ? crm.stageOrder.length : closedIndex, 0, id);
+  } else if (input.type === "delete") {
+    ensure(order.includes(input.stage), "Coluna não encontrada.", 404);
+    ensure(!crm.opportunities.some((item) => !item.deleted && item.stage === input.stage),
+      "Esta coluna tem cartões. Mova ou exclua os cartões antes de apagar a coluna.", 409);
+    ensure(["won", "lost"].includes(input.stage) || crmActiveStageIds(crm).length > 1,
+      "Mantenha ao menos uma coluna em andamento.");
+    crm.stageOrder = order.filter((stage) => stage !== input.stage);
+  } else ensure(false, "Ação de coluna inválida.");
+  return crm;
+}
+export function createCrmOpportunity(current, work, actor, { stage, at = new Date().toISOString() } = {}) {
+  const crm = structuredClone(current || emptyCrm());
+  stage ||= firstActiveStage(crm);
+  ensure(crmActiveStageIds(crm).includes(stage), "Selecione uma coluna em andamento.");
   const workKey = crmWorkKey(work);
   ensure(workKey && normalize(work.street) && normalize(work.city), "Informe o endereço da obra.");
   const existing = crm.opportunities.find((item) => item.workKey === workKey || item.primaryWorkId === work.id);
   if (existing) {
     ensure(existing.deleted, "Esta obra já possui um cartão no CRM.", 409);
     existing.deleted = false;
+    if (closed(existing)) {
+      existing.cycle++;
+      existing.products = [];
+      existing.pendingProducts = [];
+      existing.completedProducts = [];
+      existing.discardedProducts = [];
+      existing.nextAction = "";
+      existing.nextDate = "";
+    }
+    existing.stage = stage;
     existing.version++;
     existing.updatedAt = at;
     activity(crm, existing, actor, "restored", {}, at);
@@ -37,7 +79,7 @@ export function createCrmOpportunity(current, work, actor, at = new Date().toISO
   }
   const item = {
     id: uid(), primaryWorkId: work.id, workKey, work: crmWorkSnapshot(work),
-    stage: "prospecting", responsibleId: actor.teamId,
+    stage, responsibleId: actor.teamId,
     prospectorId: actor.teamId, products: [], pendingProducts: [],
     completedProducts: [], discardedProducts: [], cycle: 1,
     nextAction: "", nextDate: "", version: 1,
@@ -220,7 +262,11 @@ function addSale(
     (name) => !sale.products.includes(name),
   );
   opportunity.stage = opportunity.pendingProducts.length
-    ? "negotiating"
+    ? crmStageOrder(crm).includes("negotiating")
+      ? "negotiating"
+      : crmActiveStageIds(crm).includes(opportunity.stage)
+        ? opportunity.stage
+        : firstActiveStage(crm)
     : "won";
   if (opportunity.stage === "won") {
     opportunity.nextDate = "";
@@ -279,6 +325,8 @@ export function recordCrmVisit(
   );
   if (opportunity?.deleted) {
     opportunity.deleted = false;
+    if (!closed(opportunity) && !crmActiveStageIds(crm).includes(opportunity.stage))
+      opportunity.stage = firstActiveStage(crm);
     activity(crm, opportunity, actor, "restored", { note: "Oportunidade reaberta por nova visita." }, at);
   }
   const snapshot = crmWorkSnapshot(work, visit);
@@ -288,7 +336,7 @@ export function recordCrmVisit(
       primaryWorkId: work.id,
       workKey: crmWorkKey(work),
       work: snapshot,
-      stage: "prospecting",
+      stage: firstActiveStage(crm),
       responsibleId: visit.userId,
       prospectorId: visit.userId,
       products: [],
@@ -340,7 +388,7 @@ export function recordCrmVisit(
     opportunity.pendingProducts = [];
     opportunity.completedProducts = [];
     opportunity.discardedProducts = [];
-    opportunity.stage = "prospecting";
+    opportunity.stage = firstActiveStage(crm);
     activity(
       crm,
       opportunity,
@@ -522,7 +570,7 @@ export function applyCrmAction(
       "Reabra a oportunidade antes de atualizar a negociação.",
     );
     ensure(
-      ["prospecting", "waiting", "negotiating"].includes(input.stage),
+      crmActiveStageIds(crm).includes(input.stage),
       "Escolha uma etapa em andamento. Para concluir, registre a venda ou o motivo do encerramento.",
     );
     ensure(team(input.responsibleId), "Selecione o responsável atual.");
@@ -613,7 +661,7 @@ export function applyCrmAction(
     item.pendingProducts = [...input.products];
     item.completedProducts = [];
     item.discardedProducts = [];
-    item.stage = "prospecting";
+    item.stage = firstActiveStage(crm);
     activity(
       crm,
       item,

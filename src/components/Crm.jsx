@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import {
   CRM_STAGES,
+  crmStageOrder,
+  crmActiveStageIds,
   businessSales,
   crmTimeline,
   emptyCrm,
@@ -30,25 +32,33 @@ export default function Crm({
   account,
   onAction,
   onCreate,
+  onColumns,
   onLabels,
   onVisit,
   onNew,
 }) {
   const crm = data.crm || emptyCrm();
   const labels = { ...CRM_STAGES, ...crm.stageLabels };
+  const stageOrder = crmStageOrder(crm);
+  const activeStageIds = crmActiveStageIds(crm);
   const [query, setQuery] = useState("");
   const [responsible, setResponsible] = useState("");
   const [returns, setReturns] = useState("");
   const [mobileStage, setMobileStage] = useState("prospecting");
   const [dialog, setDialog] = useState(null);
   const [addingCard, setAddingCard] = useState(false);
+  const [addingColumn, setAddingColumn] = useState(false);
   const [editingLabel, setEditingLabel] = useState(null);
+  const [deletingColumn, setDeletingColumn] = useState(null);
   const [deletingCard, setDeletingCard] = useState(null);
   const [drop, setDrop] = useState("");
   const [view, setView] = useState("board");
   const [closedStage, setClosedStage] = useState("");
   const [page, setPage] = useState(1);
   useEffect(() => setPage(1), [query, responsible, closedStage, view]);
+  useEffect(() => {
+    if (!stageOrder.includes(mobileStage)) setMobileStage(stageOrder[0]);
+  }, [stageOrder.join("|"), mobileStage]);
   const filtered = crm.opportunities.filter(
     (item) =>
       !item.deleted &&
@@ -128,6 +138,8 @@ export default function Crm({
         </div>
         <div className="crm-intro-actions">
           <button className="button secondary" onClick={() => setAddingCard(true)}>Adicionar cartão</button>
+          {(!account || account.role === "admin") &&
+            <button className="button secondary" onClick={() => setAddingColumn(true)}><Icon name="plus" size={16} />Adicionar coluna</button>}
           <button className="button primary" onClick={onNew}><Icon name="plus" size={17} />Registrar visita</button>
         </div>
       </div>
@@ -141,7 +153,8 @@ export default function Crm({
         <Metric
           label="Em negociação"
           value={
-            crm.opportunities.filter((item) => !item.deleted && item.stage === "negotiating")
+            crm.opportunities.filter((item) => !item.deleted && active(item) &&
+              (item.stage === "negotiating" || item.completedProducts.length))
               .length
           }
           detail="Conversas próximas do fechamento"
@@ -246,21 +259,22 @@ export default function Crm({
               role="group"
               aria-label="Etapas do CRM"
             >
-              {Object.entries(labels).map(([id, label]) => (
+              {stageOrder.map((id) => (
                 <button
                   key={id}
                   className={mobileStage === id ? "active" : ""}
                   onClick={() => setMobileStage(id)}
                 >
-                  {label}
+                  {labels[id]}
                   <span>
                     {filtered.filter((item) => item.stage === id).length}
                   </span>
                 </button>
               ))}
             </div>
-            <div className="crm-board">
-              {Object.entries(labels).map(([stage, label]) => {
+            <div className="crm-board" style={{ "--crm-columns": stageOrder.length }}>
+              {stageOrder.map((stage) => {
+                const label = labels[stage];
                 const items = filtered
                   .filter((item) => item.stage === stage)
                   .sort(
@@ -297,15 +311,14 @@ export default function Crm({
                         <i />
                         {label}
                         {(!account || account.role === "admin") && (
-                          <button
-                            type="button"
-                            className="crm-column-edit"
-                            aria-label={`Renomear coluna ${label}`}
-                            title={`Renomear coluna ${label}`}
-                            onClick={() => setEditingLabel(stage)}
-                          >
-                            <Icon name="edit" size={14} />
-                          </button>
+                          <>
+                            <button type="button" className="crm-column-edit"
+                              aria-label={`Renomear coluna ${label}`} title={`Renomear coluna ${label}`}
+                              onClick={() => setEditingLabel(stage)}><Icon name="edit" size={14} /></button>
+                            <button type="button" className="crm-column-edit crm-column-delete"
+                              aria-label={`Excluir coluna ${label}`} title={`Excluir coluna ${label}`}
+                              onClick={() => setDeletingColumn(stage)}><Icon name="close" size={14} /></button>
+                          </>
                         )}
                       </span>
                       <b>{items.length}</b>
@@ -594,26 +607,33 @@ export default function Crm({
           onVisit={() => visit(selected)}
           onMode={(type) => open(selected, type)}
           labels={labels}
+          stageOrder={stageOrder}
         />
       )}
-      {addingCard && <AddCrmCard works={data.works} onCreate={onCreate} onClose={() => setAddingCard(false)} />}
+      {addingCard && <AddCrmCard works={data.works} stageIds={activeStageIds} labels={labels}
+        onCreate={onCreate} onClose={() => setAddingCard(false)} />}
+      {addingColumn && <AddCrmColumn onSave={onColumns} onClose={() => setAddingColumn(false)} />}
       {editingLabel && <EditCrmLabel key={editingLabel} stage={editingLabel} labels={labels}
         onSave={onLabels} onClose={() => setEditingLabel(null)} />}
+      {deletingColumn && <DeleteCrmColumn stage={deletingColumn} label={labels[deletingColumn]}
+        count={crm.opportunities.filter((item) => !item.deleted && item.stage === deletingColumn).length}
+        onDelete={onColumns} onClose={() => setDeletingColumn(null)} />}
       {deletingCard && <DeleteCrmCard item={deletingCard} onAction={onAction} onClose={() => setDeletingCard(null)} />}
     </div>
   );
 }
 
-function AddCrmCard({ works, onCreate, onClose }) {
+function AddCrmCard({ works, stageIds, labels, onCreate, onClose }) {
   const [workId, setWorkId] = useState("");
+  const [stage, setStage] = useState(stageIds[0] || "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async (event) => {
     event.preventDefault();
-    if (!workId) return setError("Selecione uma obra cadastrada.");
+    if (!workId || !stage) return setError("Selecione uma obra e uma coluna.");
     setBusy(true);
     setError("");
-    try { await onCreate(workId); onClose(); }
+    try { await onCreate(workId, stage); onClose(); }
     catch (cause) { setError(cause.message); }
     finally { setBusy(false); }
   };
@@ -624,10 +644,55 @@ function AddCrmCard({ works, onCreate, onClose }) {
         <option value="">Selecione uma obra</option>
         {works.map((work) => <option key={work.id} value={work.id}>{work.name} · {work.neighborhood}</option>)}
       </Select>
+      <Select label="Coluna" value={stage} onChange={setStage} required>
+        {stageIds.map((id) => <option key={id} value={id}>{labels[id]}</option>)}
+      </Select>
       {error && <p className="error" role="alert">{error}</p>}
       <footer className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancelar</button>
         <button className="button primary" disabled={busy}>{busy ? "Salvando…" : "Adicionar cartão"}</button></footer>
     </form>
+  </Modal>;
+}
+function AddCrmColumn({ onSave, onClose }) {
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try { await onSave({ type: "add", name }); onClose(); }
+    catch (cause) { setError(cause.message); }
+    finally { setBusy(false); }
+  };
+  return <Modal title="Adicionar coluna ao CRM" onClose={onClose}>
+    <form onSubmit={submit}>
+      <Field label="Nome da coluna" value={name} maxLength={35} required
+        onChange={(event) => setName(event.target.value)} />
+      {error && <p className="error" role="alert">{error}</p>}
+      <footer className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancelar</button>
+        <button className="button primary" disabled={busy}>{busy ? "Salvando…" : "Adicionar coluna"}</button></footer>
+    </form>
+  </Modal>;
+}
+function DeleteCrmColumn({ stage, label, count, onDelete, onClose }) {
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setBusy(true);
+    setError("");
+    try { await onDelete({ type: "delete", stage }); onClose(); }
+    catch (cause) { setError(cause.message); }
+    finally { setBusy(false); }
+  };
+  return <Modal title={`Excluir coluna ${label}?`} onClose={onClose}>
+    <p>{count ? `Esta coluna tem ${count} ${count === 1 ? "cartão" : "cartões"}. Mova ou exclua todos antes de apagar a coluna.`
+      : "A coluna vazia será removida do quadro. O histórico das oportunidades será preservado."}</p>
+    {error && <p className="error" role="alert">{error}</p>}
+    <footer className="modal-actions">
+      <button className="button secondary" disabled={busy} onClick={onClose}>{count ? "Entendi" : "Cancelar"}</button>
+      {!count && <button className="button primary" disabled={busy} onClick={submit}>{busy ? "Excluindo…" : "Excluir coluna"}</button>}
+    </footer>
   </Modal>;
 }
 function EditCrmLabel({ stage, labels, onSave, onClose }) {
@@ -682,6 +747,7 @@ function CrmDialog({
   onVisit,
   onMode,
   labels,
+  stageOrder,
 }) {
   const [version, setVersion] = useState(initial.version);
   const [stage, setStage] = useState(initial.stage);
@@ -888,11 +954,11 @@ function CrmDialog({
                   value={stage}
                   onChange={setStage}
                 >
-                  {Object.entries(labels)
-                    .filter(([key]) => !["won", "lost"].includes(key))
-                    .map(([id, label]) => (
+                  {stageOrder
+                    .filter((key) => !["won", "lost"].includes(key))
+                    .map((id) => (
                       <option key={id} value={id}>
-                        {label}
+                        {labels[id]}
                       </option>
                     ))}
                 </Select>
