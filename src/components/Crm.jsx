@@ -42,7 +42,7 @@ export default function Crm({
   const [mobileStage, setMobileStage] = useState("prospecting");
   const [dialog, setDialog] = useState(null);
   const [addingCard, setAddingCard] = useState(false);
-  const [editingLabels, setEditingLabels] = useState(false);
+  const [editingLabel, setEditingLabel] = useState(null);
   const [deletingCard, setDeletingCard] = useState(null);
   const [drop, setDrop] = useState("");
   const [view, setView] = useState("board");
@@ -128,8 +128,6 @@ export default function Crm({
         </div>
         <div className="crm-intro-actions">
           <button className="button secondary" onClick={() => setAddingCard(true)}>Adicionar cartão</button>
-          {(!account || account.role === "admin") &&
-            <button className="button secondary" onClick={() => setEditingLabels(true)}>Renomear colunas</button>}
           <button className="button primary" onClick={onNew}><Icon name="plus" size={17} />Registrar visita</button>
         </div>
       </div>
@@ -295,9 +293,20 @@ export default function Crm({
                     onDrop={(event) => dropped(event, stage)}
                   >
                     <header className="crm-column-heading">
-                      <span>
+                      <span className="crm-column-title">
                         <i />
                         {label}
+                        {(!account || account.role === "admin") && (
+                          <button
+                            type="button"
+                            className="crm-column-edit"
+                            aria-label={`Renomear coluna ${label}`}
+                            title={`Renomear coluna ${label}`}
+                            onClick={() => setEditingLabel(stage)}
+                          >
+                            <Icon name="edit" size={14} />
+                          </button>
+                        )}
                       </span>
                       <b>{items.length}</b>
                     </header>
@@ -588,7 +597,8 @@ export default function Crm({
         />
       )}
       {addingCard && <AddCrmCard works={data.works} onCreate={onCreate} onClose={() => setAddingCard(false)} />}
-      {editingLabels && <EditCrmLabels labels={labels} onSave={onLabels} onClose={() => setEditingLabels(false)} />}
+      {editingLabel && <EditCrmLabel key={editingLabel} stage={editingLabel} labels={labels}
+        onSave={onLabels} onClose={() => setEditingLabel(null)} />}
       {deletingCard && <DeleteCrmCard item={deletingCard} onAction={onAction} onClose={() => setDeletingCard(null)} />}
     </div>
   );
@@ -620,25 +630,25 @@ function AddCrmCard({ works, onCreate, onClose }) {
     </form>
   </Modal>;
 }
-function EditCrmLabels({ labels, onSave, onClose }) {
-  const [draft, setDraft] = useState(labels);
+function EditCrmLabel({ stage, labels, onSave, onClose }) {
+  const [draft, setDraft] = useState(labels[stage]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async (event) => {
     event.preventDefault();
     setBusy(true);
     setError("");
-    try { await onSave(draft); onClose(); }
+    try { await onSave({ ...labels, [stage]: draft }); onClose(); }
     catch (cause) { setError(cause.message); }
     finally { setBusy(false); }
   };
-  return <Modal title="Renomear colunas do CRM" onClose={onClose}>
+  return <Modal title="Renomear coluna do CRM" onClose={onClose}>
     <form onSubmit={submit}>
-      {Object.keys(CRM_STAGES).map((key) => <Field key={key} label={CRM_STAGES[key]} value={draft[key]}
-        maxLength={35} required onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} />)}
+      <Field label="Nome da coluna" value={draft} maxLength={35} required
+        onChange={(event) => setDraft(event.target.value)} />
       {error && <p className="error" role="alert">{error}</p>}
       <footer className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancelar</button>
-        <button className="button primary" disabled={busy}>{busy ? "Salvando…" : "Salvar nomes"}</button></footer>
+        <button className="button primary" disabled={busy}>{busy ? "Salvando…" : "Salvar nome"}</button></footer>
     </form>
   </Modal>;
 }
