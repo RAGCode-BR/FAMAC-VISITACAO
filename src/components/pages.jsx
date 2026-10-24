@@ -807,6 +807,7 @@ export function Works({ data, save, onVisit, onDelete }) {
   const works = data.works
     .filter(
       (item) =>
+        !item.deleted &&
         (!type || item.type === type) &&
         normalize(
           `${item.name} ${item.neighborhood} ${item.city} ${item.responsible}`,

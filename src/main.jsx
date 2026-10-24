@@ -356,6 +356,9 @@ function App({ account, onLogout }) {
           ),
         }
       : data;
+  const visibleWorksCount = operationalData.works.filter(
+    (item) => !item.deleted,
+  ).length;
   const navigation = NAV.filter(([id]) => id !== "team" || canAssign);
   const metadata = PAGE[page];
   if (loading || loadError)
@@ -427,8 +430,8 @@ function App({ account, onLogout }) {
                   +
                 </span>
               )}
-              {id === "works" && data.works.length > 0 && (
-                <small>{data.works.length}</small>
+              {id === "works" && visibleWorksCount > 0 && (
+                <small>{visibleWorksCount}</small>
               )}
             </button>
           ))}
