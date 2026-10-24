@@ -106,6 +106,46 @@ try {
   }, data);
   await page.reload();
   await page.locator(".visit-form").waitFor();
+  await navigate("Visitas realizadas");
+  const visitsPager = page.getByRole("navigation", {
+    name: "Paginação de visitas",
+  });
+  const visitRows = page.getByRole("table").locator("tbody tr");
+  assert.equal(await visitRows.count(), 6);
+  await visitsPager
+    .getByRole("button", { name: "Próxima página", exact: true })
+    .click();
+  assert.equal(await visitRows.count(), 6);
+  await visitsPager
+    .getByRole("button", { name: "Próxima página", exact: true })
+    .click();
+  assert.equal(await visitRows.count(), 6);
+  await page.getByLabel("Buscar visitas").fill("Obra de teste 01");
+  assert.equal(await visitRows.count(), 1);
+  assert.equal(await visitsPager.count(), 0);
+  await page.getByLabel("Buscar visitas").fill("");
+  assert.equal(await visitRows.count(), 6);
+  assert.equal(
+    await visitsPager
+      .getByRole("button", { name: "Página anterior", exact: true })
+      .isDisabled(),
+    true,
+  );
+  await page.setViewportSize({ width: 390, height: 850 });
+  await visitsPager
+    .getByRole("button", { name: "Próxima página", exact: true })
+    .click();
+  assert.equal(await visitRows.count(), 6);
+  await fits();
+  await page.screenshot({
+    path: "test-results/visits-pagination-mobile.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  console.log(
+    "PASS: Visitas com 18 registros em três páginas de seis, busca na coleção completa, retorno à primeira página e navegação no celular",
+  );
   await navigate("Contatos");
   assert.equal(await page.locator(".contact-card").count(), 12);
   const contactsPager = page.getByRole("navigation", {
@@ -173,6 +213,7 @@ try {
     .getByLabel("Vincular a uma obra existente", { exact: true })
     .selectOption({ index: 1 });
   await page.getByLabel("Oferecer REVESTIMENTO TESTE", { exact: true }).check();
+  await page.getByLabel("Tipo de visita", { exact: true }).selectOption("closing");
   await page.getByLabel("Vendeu REVESTIMENTO TESTE", { exact: true }).check();
   await page
     .getByLabel("Valor total vendido (R$)", { exact: true })
@@ -200,7 +241,7 @@ try {
     await page.locator(".conversion-panel .kpi-ring strong").textContent(),
     "100%",
   );
-  assert.equal(await page.locator(".team-kpi").count(), 3);
+  assert.equal(await page.locator(".team-kpi").count(), TEAM.length);
   console.log(
     "PASS: produto novo persiste, bloqueia duplicidade e participa de visita, venda, filtros e KPI",
   );

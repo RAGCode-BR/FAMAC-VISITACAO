@@ -47,6 +47,8 @@ A visualização Em andamento mostra cartões ativos e resumos das etapas finais
 
 `crm_sales.source_visit_id` é único. Vendas lançadas em visitas são integradas atomicamente; vendas lançadas no CRM podem ser vinculadas a uma visita do mesmo vendedor, mantendo seus produtos e valor, sem gerar outro fechamento. Datas da venda e da visita podem diferir. O consolidado financeiro inclui vendas do CRM e visitas sem CRM, removendo duplicidades; métricas de presença e de visitas continuam baseadas em visitas físicas. Colaboradores consultam seus próprios fechamentos nos relatórios; o quadro comercial é compartilhado.
 
+Excluir um cartão do CRM oculta a oportunidade, mas preserva os fechamentos e seus valores no financeiro. A exclusão do cartão não cancela vendas. A tela Visitas realizadas pagina seis registros após pesquisar toda a coleção; o histórico dos relatórios mantém sua configuração própria.
+
 A migração `005-crm.sql` é aditiva. `scripts/migrate.mjs` concilia visitas antigas ainda não vinculadas, em ordem cronológica e de forma idempotente, sem reescrever seu histórico. Executar novamente após o deploy cobre visitas salvas pela versão anterior durante a publicação. O quadro usa atualização automática existente, sem habilitar outro serviço.
 
 O schema `famac` contém membros, obras, contatos, visitas, programação, referências de fotos, revisão e operações. Dados são salvos por registro, com autoria no servidor. A API verifica JWT do Neon Auth e o vínculo fixo da conta antes de consultar ou alterar dados. A interface não acessa Postgres nem S3 com credenciais próprias.

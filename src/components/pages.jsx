@@ -60,7 +60,7 @@ const roleName = (role) =>
     architect: "Arquiteto",
     responsible: "Responsável",
   })[role];
-export function VisitsTable({ visits, onDetail, onDelete }) {
+export function VisitsTable({ visits, onDetail, onDelete, pageSize = 12 }) {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const filtered = visits.filter((item) =>
@@ -70,7 +70,7 @@ export function VisitsTable({ visits, onDetail, onDelete }) {
   );
   const currentPage = Math.min(
     page,
-    Math.max(1, Math.ceil(filtered.length / 12)),
+    Math.max(1, Math.ceil(filtered.length / pageSize)),
   );
   return (
     <>
@@ -112,7 +112,7 @@ export function VisitsTable({ visits, onDetail, onDelete }) {
                       b.date.localeCompare(a.date) ||
                       b.createdAt.localeCompare(a.createdAt),
                   )
-                  .slice((currentPage - 1) * 12, currentPage * 12)
+                  .slice((currentPage - 1) * pageSize, currentPage * pageSize)
                   .map((item) => (
                     <tr key={item.id}>
                       <td>
@@ -187,7 +187,7 @@ export function VisitsTable({ visits, onDetail, onDelete }) {
           <Pagination
             page={currentPage}
             totalItems={filtered.length}
-            pageSize={12}
+            pageSize={pageSize}
             onChange={setPage}
             itemLabel="visitas"
           />

@@ -565,6 +565,7 @@ function App({ account, onLogout }) {
               </div>
               <VisitsTable
                 visits={data.visits}
+                pageSize={6}
                 onDetail={setDetail}
                 onDelete={(visit) => {
                   setDeletingVisit(visit);
