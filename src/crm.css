@@ -528,6 +528,53 @@
   padding: 9px 11px;
   font-size: 11px;
 }
+.crm-prospecting-context {
+  margin: 1px 0 22px;
+  border: 1px solid #dfe5f0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+}
+.crm-prospecting-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  background: #f5f7fb;
+  border-bottom: 1px solid #e7ebf3;
+}
+.crm-prospecting-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: #fff0f2;
+  color: #bd2340;
+}
+.crm-prospecting-heading h3 { margin: 0; color: #1d2b50; font-size: 15px; }
+.crm-prospecting-heading p { margin: 4px 0 0; color: #73819a; font-size: 12px; line-height: 1.4; }
+.crm-prospecting-empty { margin: 0; padding: 18px; color: #73819a; font-size: 13px; line-height: 1.5; }
+.crm-prospecting-context > .error { margin: 16px 18px; }
+.crm-prospecting-list { display: grid; }
+.crm-prospecting-visit { padding: 17px 18px 19px; }
+.crm-prospecting-visit + .crm-prospecting-visit { border-top: 1px solid #e8ecf3; }
+.crm-prospecting-visit-heading { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.crm-prospecting-visit-heading strong { color: #1e2f54; font-size: 13px; }
+.crm-prospecting-visit-heading span, .crm-prospecting-visit > small { color: #8390a8; font-size: 12px; }
+.crm-prospecting-products { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.crm-prospecting-visit > .pre-line { margin: 13px 0 0; color: #445574; font-size: 13px; line-height: 1.6; }
+.crm-prospecting-visit > small { display: block; margin-top: 12px; }
+.crm-prospecting-photos { margin-top: 13px; }
+.crm-prospecting-photos img { height: 125px; }
+@media (max-width: 600px) {
+  .crm-prospecting-heading { padding: 14px; }
+  .crm-prospecting-visit { padding: 15px 14px; }
+  .crm-prospecting-visit-heading { flex-wrap: wrap; }
+  .crm-prospecting-photos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .crm-prospecting-photos img { height: 105px; }
+}
 .crm-action-form {
   background: #f7f9fc;
   border: 1px solid #e4e8f0;

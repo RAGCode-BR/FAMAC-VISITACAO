@@ -20,6 +20,8 @@ import {
   today,
 } from "../lib/domain.mjs";
 import { Badge, Empty, Field, Icon, Metric, Modal, Select } from "./ui.jsx";
+import VisitPhoto from "./VisitPhoto.jsx";
+import { repository } from "../lib/repository.mjs";
 import Pagination from "./Pagination.jsx";
 import "../crm.css";
 
@@ -948,6 +950,7 @@ function CrmDialog({
           </>
         )}
       </div>
+      <ProspectingContext opportunity={item} account={account} />
       {type !== "details" && (
         <form className="crm-action-form" onSubmit={submit}>
           <h3>{titles[type]}</h3>
@@ -1175,6 +1178,56 @@ function CrmDialog({
       </section>
     </Modal>
   );
+}
+function ProspectingContext({ opportunity, account }) {
+  const allowed = !account || account.role === "admin" ||
+    account.teamId === opportunity.responsibleId;
+  const key = `${opportunity.id}:${opportunity.version}`;
+  const [result, setResult] = useState({ key: "", visits: null, error: "" });
+  useEffect(() => {
+    if (!allowed) return;
+    const controller = new AbortController();
+    repository.crmProspecting(opportunity.id, controller.signal)
+      .then((visits) => {
+        if (!controller.signal.aborted) setResult({ key, visits, error: "" });
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted)
+          setResult({ key, visits: null, error: error.message });
+      });
+    return () => controller.abort();
+  }, [key, allowed]);
+  const visits = result.key === key ? result.visits : null;
+  return <section className="crm-prospecting-context" aria-label="Registros da prospecção">
+    <div className="crm-prospecting-heading">
+      <span className="crm-prospecting-icon"><Icon name="camera" size={19} /></span>
+      <div>
+        <h3>Registros da prospecção</h3>
+        <p>Fotos e anotações para preparar a conversa com o cliente.</p>
+      </div>
+    </div>
+    {!allowed ? <p className="crm-prospecting-empty">Disponível para o vendedor designado e a administração.</p>
+      : result.key !== key ? <p className="crm-prospecting-empty" role="status">Carregando registros…</p>
+      : result.error ? <p className="error" role="alert">{result.error}</p>
+      : !visits?.length ? <p className="crm-prospecting-empty">Nenhuma visita vinculada a esta oportunidade.</p>
+      : <div className="crm-prospecting-list">{visits.map((visit) =>
+        <article className="crm-prospecting-visit" key={visit.id}>
+          <div className="crm-prospecting-visit-heading">
+            <strong>{dateLabel(visit.date)}</strong>
+            <span>Visita de {person(visit.userId)}</span>
+          </div>
+          {!!visit.offered?.length && <div className="crm-prospecting-products">
+            {visit.offered.map((product) => <Badge key={product} tone={visit.sold?.includes(product) ? "success" : "blue"}>
+              {product}{visit.sold?.includes(product) ? " · vendido" : " · oferecido"}
+            </Badge>)}
+          </div>}
+          {visit.notes && <p className="pre-line">{visit.notes}</p>}
+          {!!visit.photos?.length && <div className="detail-photos crm-prospecting-photos">
+            {visit.photos.map((photo) => <VisitPhoto key={photo.id} photo={photo} alt={`Foto da obra: ${photo.name}`} />)}
+          </div>}
+          {!visit.notes && !visit.photos?.length && <small>Sem fotos ou anotações nesta visita.</small>}
+        </article>)}</div>}
+  </section>;
 }
 function eventLabel(event, labels = CRM_STAGES) {
   return (

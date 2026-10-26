@@ -522,7 +522,8 @@ export default function VisitForm({
             </label>
             <small>
               Compartilha com a equipe os contatos da obra, o endereço e os
-              produtos. Fotos e anotações da visita continuam no seu histórico.
+              produtos. O vendedor designado também poderá consultar as fotos e
+              anotações desta visita pelo CRM.
             </small>
             {form.crmEnabled && (
               <Select

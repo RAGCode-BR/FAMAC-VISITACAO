@@ -109,6 +109,20 @@ export const repository = cloudEnabled
       setActor(teamId) {
         actorTeamId = teamId;
       },
+      async crmProspecting(opportunityId) {
+        const current = await localRepository.load();
+        const activeVisitIds = new Set((current.crm?.visitLinks || [])
+          .filter((link) => link.opportunityId === opportunityId && !link.deleted)
+          .map((link) => link.visitId));
+        return current.visits
+          .filter((visit) => activeVisitIds.has(visit.id) && !visit.deleted)
+          .sort((a, b) => b.date.localeCompare(a.date))
+          .map((visit) => ({
+            id: visit.id, userId: visit.userId, date: visit.date,
+            stage: visit.stage, offered: visit.offered, sold: visit.sold,
+            notes: visit.notes || "", photos: visit.photos || [],
+          }));
+      },
       async crmAction(opportunityId, action) {
         const current = await localRepository.load();
         const crm = applyCrmAction(

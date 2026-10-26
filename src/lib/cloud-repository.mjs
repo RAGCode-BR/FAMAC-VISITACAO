@@ -9,6 +9,9 @@ export const cloudRepository = {
   load() {
     return api("/state");
   },
+  crmProspecting(opportunityId, signal) {
+    return api(`/crm/${opportunityId}/prospecting`, { signal });
+  },
   sync(revision, signal) {
     return api(`/state?since=${revision}`, { signal });
   },

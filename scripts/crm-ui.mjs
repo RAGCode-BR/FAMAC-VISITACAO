@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { chromium } from "playwright";
 import { emptyData, newVisit, recordVisit, today } from "../src/lib/domain.mjs";
 import { applyCrmAction, reconcileLocalCrm } from "../src/lib/crm.mjs";
@@ -60,6 +60,7 @@ try {
     "Reforma Jardim",
     "Edifício Norte",
   ];
+  const photoUrl = `data:image/jpeg;base64,${(await readFile("public/famac-logo.jpg")).toString("base64")}`;
   for (let index = 0; index < names.length; index++)
     data = recordVisit(data, {
       ...newVisit("claudionor"),
@@ -73,6 +74,8 @@ try {
       sold: index === 3 ? ["TOLDOS"] : [],
       stage: index === 3 ? "closing" : "prospecting",
       saleValue: index === 3 ? 2000 : 0,
+      notes: index === 0 ? "Cliente quer avaliar o forro na sala principal." : "",
+      photos: index === 0 ? [{ id: crypto.randomUUID(), name: "Foto da obra", url: photoUrl }] : [],
     });
   for (let index = 1; index <= 15; index++)
     data = recordVisit(data, {
@@ -166,6 +169,9 @@ try {
     animations: "disabled",
   });
   await open(names[0]);
+  await modal.getByRole("region", { name: "Registros da prospecção" })
+    .getByText("Cliente quer avaliar o forro na sala principal.").waitFor();
+  await modal.locator(".crm-prospecting-photos img").waitFor();
   await modal.getByLabel("Etapa da oportunidade").selectOption("waiting");
   await modal
     .getByLabel("Vendedor responsável", { exact: true })

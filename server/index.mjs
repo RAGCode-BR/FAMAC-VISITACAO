@@ -694,7 +694,7 @@ app.post("/photos", async (c) => {
   }
   return c.json({ id, key, name }, 201);
 });
-async function photoFor(member, id) {
+async function photoFor(member, id, allowAssignedSeller = false) {
   if (!validId(id)) fail("Foto inválida.");
   const result = await pool.query(
     "SELECT photo.*,visit.payload->>'deleted' AS visit_deleted FROM famac.photos photo LEFT JOIN famac.visits visit ON visit.id=photo.visit_id WHERE photo.id=$1",
@@ -702,12 +702,24 @@ async function photoFor(member, id) {
   );
   if (!result.rowCount) fail("Foto não encontrada.", 404);
   const photo = result.rows[0];
-  requireOwner(member, photo.owner_id);
   if (photo.visit_deleted === "true") fail("Foto não encontrada.", 404);
+  if (member.role !== "admin" && member.teamId !== photo.owner_id) {
+    if (!allowAssignedSeller || !photo.linked) fail("Foto indisponível.", 403);
+    const assigned = await pool.query(
+      `SELECT 1 FROM famac.crm_visit_links link
+       JOIN famac.crm_opportunities opportunity ON opportunity.id=link.opportunity_id
+       WHERE link.visit_id=$1
+         AND link.payload->>'deleted' IS DISTINCT FROM 'true'
+         AND opportunity.payload->>'deleted' IS DISTINCT FROM 'true'
+         AND opportunity.payload->>'responsibleId'=$2`,
+      [photo.visit_id, member.teamId],
+    );
+    if (!assigned.rowCount) fail("Foto indisponível.", 403);
+  }
   return photo;
 }
 app.get("/photos/:id/url", async (c) => {
-  const photo = await photoFor(c.get("member"), c.req.param("id"));
+  const photo = await photoFor(c.get("member"), c.req.param("id"), true);
   return c.json({ url: await files.url(photo.object_key, { expiresIn: 300 }) });
 });
 app.delete("/photos/:id", async (c) => {

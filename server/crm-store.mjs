@@ -148,6 +148,41 @@ export async function backfillCrm(db) {
 }
 
 export function installCrmRoutes(app, pool, readState) {
+  app.get("/crm/:id/prospecting", async (c) => {
+    const opportunityId = c.req.param("id");
+    if (!validId(opportunityId)) fail("Oportunidade inválida.");
+    const member = c.get("member");
+    const opportunity = await pool.query(
+      "SELECT payload FROM famac.crm_opportunities WHERE id=$1",
+      [opportunityId],
+    );
+    if (!opportunity.rowCount || opportunity.rows[0].payload.deleted)
+      fail("Oportunidade não encontrada.", 404);
+    if (member.role !== "admin" &&
+      member.teamId !== opportunity.rows[0].payload.responsibleId)
+      fail("Somente o vendedor designado pode consultar os registros da prospecção.", 403);
+    const rows = await pool.query(
+      `SELECT v.id,v.owner_id,v.payload FROM famac.crm_visit_links link
+       JOIN famac.visits v ON v.id=link.visit_id
+       WHERE link.opportunity_id=$1
+         AND link.payload->>'deleted' IS DISTINCT FROM 'true'
+         AND v.payload->>'deleted' IS DISTINCT FROM 'true'
+       ORDER BY v.visit_date DESC,v.updated_at DESC,v.id`,
+      [opportunityId],
+    );
+    return c.json(rows.rows.map(({ id, owner_id: ownerId, payload }) => ({
+      id,
+      userId: ownerId,
+      date: payload.date,
+      stage: payload.stage,
+      offered: Array.isArray(payload.offered) ? payload.offered : [],
+      sold: Array.isArray(payload.sold) ? payload.sold : [],
+      notes: typeof payload.notes === "string" ? payload.notes : "",
+      photos: Array.isArray(payload.photos)
+        ? payload.photos.map((photo) => ({ id: photo.id, name: photo.name, key: photo.key }))
+        : [],
+    })));
+  });
   app.post("/crm/opportunities", async (c) => {
     const member = c.get("member");
     const { workId, stage, actorTeamId, operationId } = await c.req.json();

@@ -95,6 +95,15 @@ export async function runCrmNeon({
     .fill("Retomar com arquiteto");
   await dialog.getByLabel("Data do próximo retorno").fill(today());
   await submit(charles);
+  const sharedContext = await call(charles, `/crm/${opportunity.id}/prospecting`);
+  assert.equal(sharedContext.status, 200);
+  assert.equal(sharedContext.data.find((visit) => visit.id === privateVisit.id).notes,
+    "Anotação privada do prospector");
+  assert.equal(sharedContext.data.find((visit) => visit.id === privateVisit.id).photos[0].id,
+    privateVisit.photos[0].id);
+  assert.equal((await call(charles, `/photos/${privateVisit.photos[0].id}/url`)).status, 200);
+  assert.equal((await call(celso, `/crm/${opportunity.id}/prospecting`)).status, 403);
+  assert.equal((await call(celso, `/photos/${privateVisit.photos[0].id}/url`)).status, 403);
   await navigate(charles, "Programação");
   await charles
     .locator(".crm-schedule-returns")
