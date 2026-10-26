@@ -19,6 +19,7 @@ export const TEAM = [
   { id: "charles", name: "Charles", initials: "CH" },
   { id: "celso", name: "Celso", initials: "CE" },
   { id: "recepcao", name: "Recepção", initials: "RE" },
+  { id: "joao", name: "João", initials: "JO" },
 ];
 export const STAGES = {
   prospecting: "Prospecção",

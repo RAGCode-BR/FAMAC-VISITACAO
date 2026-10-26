@@ -4,7 +4,7 @@ Projeto FAMAC `morning-river-28975560`, organização `org-fancy-queen-60178958`
 
 ## Acesso
 
-O usuário informa **PIN de um número e senha**, sem caixa de e-mail: 0 para o administrador, 1 para Claudionor, 2 para Charles e 3 para Celso. O PIN é convertido em um identificador técnico reservado pelo `src/lib/identity.mjs` para usar o Neon Auth gerenciado. Esse identificador permanece estável para preservar as contas e senhas existentes; não envia mensagens nem aparece no formulário. Não há cadastro público; os usuários são criados pela administração. O PIN não substitui a senha. O formato de um dígito comporta no máximo dez identificadores distintos.
+O usuário informa **PIN de um número e senha**, sem caixa de e-mail: 0 para o administrador, 1 para Claudionor, 2 para Charles, 3 para Celso, 4 para Recepção e 5 para João. O PIN é convertido em um identificador técnico reservado pelo `src/lib/identity.mjs` para usar o Neon Auth gerenciado. Esse identificador permanece estável para preservar as contas e senhas existentes; não envia mensagens nem aparece no formulário. Não há cadastro público; os usuários são criados pela administração. O PIN não substitui a senha. O formato de um dígito comporta no máximo dez identificadores distintos.
 
 - Colaborador: somente obras, visitas, programação, fotos e contatos de responsáveis com sua autoria. Arquitetos e empreiteiros são compartilhados, disponíveis para consulta, seleção, edição e exclusão por toda a equipe. A autoria original é preservada; contatos importados sem colaborador atribuído usam `owner_id='shared'`.
 - Administrador: consulta toda a equipe. O seletor no topo define o colaborador para novos cadastros; os relatórios continuam consolidando todos os registros autorizados.
