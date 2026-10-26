@@ -3,6 +3,7 @@ import { cloudEnabled } from "./auth.mjs";
 import { cloudRepository } from "./cloud-repository.mjs";
 import {
   applyCrmAction,
+  assignCrmSeller,
   createCrmOpportunity,
   changeCrmColumns,
   CRM_STAGES,
@@ -10,6 +11,7 @@ import {
   reconcileLocalCrm,
 } from "./crm.mjs";
 import { person, productNames } from "./domain.mjs";
+import { sellerAssignments } from "./seller-notifications.mjs";
 let actorTeamId = "claudionor";
 
 // Apenas o armazenamento FAMAC. Nenhuma credencial, SDK ou conexão externa.
@@ -57,6 +59,17 @@ const localRepository = {
     });
   },
   async save(data) {
+    const previous = await this.load();
+    const newVisitWorkIds = new Set(data.visits
+      .filter((visit) => !previous.visits.some((item) => item.id === visit.id))
+      .map((visit) => visit.workId));
+    for (const work of data.works) {
+      const original = previous.works.find((item) => item.id === work.id);
+      if (!work.sellerId || work.sellerId === original?.sellerId ||
+        newVisitWorkIds.has(work.id)) continue;
+      data.crm = assignCrmSeller(data.crm || previous.crm, work, work.sellerId,
+        { name: person(actorTeamId), teamId: actorTeamId });
+    }
     let nextNumber = data.nextServiceNumber || Math.max(0, ...data.visits.map((visit) => Number(visit.serviceNumber) || 0)) + 1;
     data = { ...data, visits: data.visits.map((visit) => visit.serviceNumber ? visit : { ...visit, serviceNumber: nextNumber++ }), nextServiceNumber: nextNumber };
     data = reconcileLocalCrm(data, {
@@ -64,6 +77,16 @@ const localRepository = {
       teamId: actorTeamId,
       name: person(actorTeamId),
     });
+    data.notifications = [...(data.notifications || []),
+      ...sellerAssignments(previous.crm, data.crm).map((item) => ({
+        id: crypto.randomUUID(),
+        opportunityId: item.id,
+        workName: item.work.name,
+        actorName: person(actorTeamId),
+        recipientTeamId: item.responsibleId,
+        createdAt: new Date().toISOString(),
+        readAt: null,
+      }))];
     const db = await database();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction("application", "readwrite");
@@ -96,6 +119,16 @@ export const repository = cloudEnabled
           productNames(current),
         );
         return localRepository.save({ ...current, crm });
+      },
+      async markNotificationRead(id) {
+        const current = await localRepository.load();
+        if (!current.notifications?.some((item) => item.id === id))
+          throw new Error("Notificação não encontrada.");
+        return localRepository.save({
+          ...current,
+          notifications: current.notifications.map((item) => item.id === id
+            ? { ...item, readAt: new Date().toISOString() } : item),
+        });
       },
       async deleteVisit(id) {
         const current = await localRepository.load();

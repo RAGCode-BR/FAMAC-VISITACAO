@@ -12,6 +12,22 @@ export const cloudRepository = {
   sync(revision, signal) {
     return api(`/state?since=${revision}`, { signal });
   },
+  async markNotificationRead(id) {
+    const operationId = crypto.randomUUID();
+    try {
+      return await api(`/notifications/${id}/read`, {
+        method: "POST",
+        body: JSON.stringify({ operationId }),
+      });
+    } catch (error) {
+      if (!error.status) {
+        const outcome = await api(`/operations/${operationId}`).catch(() => null);
+        if (outcome?.committed) return this.load();
+        error.message = "Não foi possível confirmar a leitura. Atualize as notificações e tente novamente.";
+      }
+      throw error;
+    }
+  },
   async crmAction(opportunityId, action) {
     const operationId = crypto.randomUUID();
     try {

@@ -24,7 +24,9 @@ import {
   installCrmRoutes,
   readCrm,
   syncVisitCrm,
+  persistCrm,
 } from "./crm-store.mjs";
+import { assignCrmSeller } from "../src/lib/crm.mjs";
 import {
   productKey,
   productNames,
@@ -122,6 +124,21 @@ async function readState(db, member, since) {
     }));
   }
   state.crm = await readCrm(db);
+  state.sellers = (await db.query(
+    "SELECT team_id FROM famac.members WHERE active=true AND role='collaborator' AND team_id IS NOT NULL ORDER BY name",
+  )).rows.map((row) => row.team_id);
+  state.notifications = member.teamId
+    ? (await db.query(
+        `SELECT id, opportunity_id AS "opportunityId", kind, work_name AS "workName",
+                actor_name AS "actorName", created_at AS "createdAt", read_at AS "readAt"
+         FROM famac.notifications WHERE recipient_team_id=$1 AND
+           (read_at IS NULL OR id IN (
+             SELECT id FROM famac.notifications WHERE recipient_team_id=$1 AND read_at IS NOT NULL
+             ORDER BY created_at DESC LIMIT 20
+           )) ORDER BY created_at DESC,id DESC`,
+        [member.teamId],
+      )).rows
+    : [];
   return state;
 }
 async function snapshot(member, since) {
@@ -162,6 +179,38 @@ app.get("/operations/:id", async (c) => {
     [c.req.param("id"), c.get("member").authId],
   );
   return c.json({ committed: Boolean(result.rowCount) });
+});
+app.post("/notifications/:id/read", async (c) => {
+  const member = c.get("member");
+  const id = c.req.param("id");
+  const { operationId } = await c.req.json();
+  if (!validId(id) || !validId(operationId) || !member.teamId)
+    fail("Notificação inválida.");
+  const db = await pool.connect();
+  try {
+    await db.query("BEGIN");
+    await db.query("SELECT value FROM famac.revision WHERE singleton=true FOR UPDATE");
+    const repeated = await db.query("SELECT auth_id FROM famac.operations WHERE id=$1", [operationId]);
+    if (repeated.rowCount) {
+      if (repeated.rows[0].auth_id !== member.authId) fail("Operação inválida.", 403);
+    } else {
+      const result = await db.query(
+        "UPDATE famac.notifications SET read_at=now() WHERE id=$1 AND recipient_team_id=$2 AND read_at IS NULL RETURNING opportunity_id",
+        [id, member.teamId],
+      );
+      if (!result.rowCount) fail("Notificação indisponível ou já lida.", 404);
+      await db.query("UPDATE famac.revision SET value=value+1 WHERE singleton=true");
+      await db.query("INSERT INTO famac.operations(id,auth_id) VALUES ($1,$2)", [operationId, member.authId]);
+    }
+    const state = await readState(db, member);
+    await db.query("COMMIT");
+    return c.json(state);
+  } catch (error) {
+    await db.query("ROLLBACK");
+    throw error;
+  } finally {
+    db.release();
+  }
 });
 app.delete("/visits/:id", async (c) => {
   const id = c.req.param("id");
@@ -295,6 +344,9 @@ app.put("/state", async (c) => {
         409,
       );
     const before = await readState(db, member);
+    const visitWorkIds = new Set(state.visits
+      .filter((visit) => !before.visits.some((existing) => existing.id === visit.id))
+      .map((visit) => visit.workId));
     if (state.crm !== undefined && !isDeepStrictEqual(state.crm, before.crm))
       fail("O CRM deve ser atualizado pelas ações da oportunidade.", 403);
     if (state.products === undefined) state.products = before.products;
@@ -467,6 +519,14 @@ app.put("/state", async (c) => {
             `INSERT INTO famac.${kind}(id,owner_id,payload) VALUES ($1,$2,$3) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,updated_at=now()`,
             [record.id, owner, payload],
           );
+        if (kind === "works" && payload.sellerId &&
+          payload.sellerId !== existing.rows[0]?.payload.sellerId &&
+          !visitWorkIds.has(record.id)) {
+          const crmBefore = await readCrm(db);
+          const crmAfter = assignCrmSeller(crmBefore, payload, payload.sellerId,
+            { ...member, teamId: member.teamId || owner, name: member.name });
+          await persistCrm(db, crmBefore, crmAfter, { actorName: member.name });
+        }
         if (kind === "visits") await syncVisitCrm(db, payload, owner, member);
       }
     }

@@ -93,6 +93,9 @@ export function validateRecord(kind, record, allowedProducts = PRODUCTS) {
     )
       fail("Informe nome e função válidos para o contato.");
   } else if (kind === "works") {
+    if (record.sellerId !== undefined && record.sellerId !== "" &&
+      !TEAM.some((user) => user.id === record.sellerId))
+      fail("Selecione um vendedor válido.");
     for (const field of ["name", "street", "neighborhood", "city"])
       if (
         typeof record[field] !== "string" ||

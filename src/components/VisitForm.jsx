@@ -45,6 +45,7 @@ export default function VisitForm({
         userId,
         crmOpportunityId: opportunity.id,
         crmEnabled: true,
+        sellerId: opportunity.responsibleId,
         contractorQuery: opportunity.work.contractorName,
         architectQuery: opportunity.work.architectName,
       };
@@ -57,6 +58,7 @@ export default function VisitForm({
           planId: plan.id,
           userId: plan.userId,
           crmEnabled: true,
+          sellerId: data.crm?.opportunities.find((item) => item.id === work.crmOpportunityId)?.responsibleId || work.sellerId || userId,
           contractorQuery:
             data.contacts.find((item) => item.id === work.contractorId)?.name ||
             "",
@@ -109,6 +111,7 @@ export default function VisitForm({
             "architectQuery",
             "crmOpportunityId",
             "crmSaleId",
+            "sellerId",
           ].map((key) => [key, empty[key] || ""]),
         ),
       );
@@ -121,6 +124,7 @@ export default function VisitForm({
       crmOpportunityId: work.crmOpportunityId || "",
       crmSaleId: "",
       crmEnabled: true,
+      sellerId: data.crm?.opportunities.find((item) => item.id === work.crmOpportunityId)?.responsibleId || work.sellerId || form.userId,
       contractorQuery:
         data.contacts.find((item) => item.id === work.contractorId)?.name || "",
       architectQuery:
@@ -230,7 +234,7 @@ export default function VisitForm({
               label="Colaborador"
               disabled={!canAssign}
               value={form.userId}
-              onChange={(userId) => update({ userId })}
+              onChange={(userId) => update({ userId, ...(form.sellerId === form.userId ? { sellerId: userId } : {}) })}
               required
             >
               {TEAM.map((item) => (
@@ -355,6 +359,15 @@ export default function VisitForm({
               }
             />
           </div>
+          {form.crmEnabled && (
+            <Select label="Vendedor designado" value={form.sellerId || form.userId}
+              onChange={(sellerId) => update({ sellerId })}>
+              {TEAM.filter((item) => !data.sellers || data.sellers.includes(item.id)).map((item) => (
+                <option key={item.id} value={item.id}>{item.name}</option>
+              ))}
+            </Select>
+          )}
+          {form.crmEnabled && <small className="form-help">O vendedor escolhido receberá uma notificação da oportunidade.</small>}
         </section>
         <section className="panel form-section">
           <div className="section-heading">
@@ -532,6 +545,7 @@ export default function VisitForm({
                           workId: own?.id || "",
                           crmOpportunityId: id,
                           crmSaleId: "",
+                          sellerId: item.responsibleId,
                           contractorQuery: item.work.contractorName,
                           architectQuery: item.work.architectName,
                         }

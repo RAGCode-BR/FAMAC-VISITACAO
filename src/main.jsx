@@ -7,6 +7,7 @@ import { Badge, Icon, Modal } from "./components/ui.jsx";
 import VisitForm from "./components/VisitForm.jsx";
 import AuthGate, { PasswordForm } from "./components/AuthGate.jsx";
 import Crm from "./components/Crm.jsx";
+import NotificationBell from "./components/NotificationBell.jsx";
 import {
   Catalog,
   Contacts,
@@ -118,6 +119,7 @@ function App({ account, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [page, setPage] = useState("new");
+  const [crmFocus, setCrmFocus] = useState(null);
   const [navOpen, setNavOpen] = useState(false);
   const [userId, setUserId] = useState(account?.teamId || "claudionor");
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -292,6 +294,8 @@ function App({ account, onLogout }) {
       action.type === "add" ? "Coluna adicionada." : "Coluna excluída."), [persist]);
   const updateCrmStageLabels = useCallback((labels) =>
     persist(() => repository.updateCrmStageLabels(labels), "Colunas atualizadas."), [persist]);
+  const markNotificationRead = useCallback((id) =>
+    persist(() => repository.markNotificationRead(id), "Notificação marcada como lida."), [persist]);
   const deleteVisit = async () => {
     if (!deletingVisit || deleteBusy) return;
     setDeleteBusy(true);
@@ -465,6 +469,16 @@ function App({ account, onLogout }) {
             <strong>{NAV.find((item) => item[0] === page)[2]}</strong>
           </div>
           <div className="topbar-right">
+            <NotificationBell
+              notifications={(data.notifications || []).filter((item) =>
+                account ? account.teamId && (!item.recipientTeamId || item.recipientTeamId === account.teamId)
+                  : item.recipientTeamId === userId)}
+              onRead={markNotificationRead}
+              onOpen={(id) => {
+                setCrmFocus({ id, nonce: Date.now() });
+                navigate("crm");
+              }}
+            />
             <span className="topbar-date">
               <Icon name="calendar" size={16} />
               {new Date(`${today()}T12:00:00`).toLocaleDateString("pt-BR", {
@@ -593,6 +607,7 @@ function App({ account, onLogout }) {
                 startVisit({ crmOpportunityId: opportunity.id, userId })
               }
               onNew={() => navigate("new")}
+              focus={crmFocus}
             />
           )}
           {page === "contacts" && (

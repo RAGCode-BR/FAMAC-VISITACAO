@@ -105,6 +105,36 @@ export function createCrmOpportunity(current, work, actor, { stage, at = new Dat
   return crm;
 }
 
+export function assignCrmSeller(current, work, sellerId, actor, at = new Date().toISOString()) {
+  ensure(team(sellerId), "Selecione um vendedor válido.");
+  let crm = structuredClone(current || emptyCrm());
+  let item = crm.opportunities.find((row) =>
+    row.id === work.crmOpportunityId || row.primaryWorkId === work.id || row.workKey === crmWorkKey(work),
+  );
+  if (!item || item.deleted) {
+    crm = createCrmOpportunity(crm, work, actor, { at });
+    item = crm.opportunities.find((row) =>
+      row.primaryWorkId === work.id || row.workKey === crmWorkKey(work),
+    );
+  }
+  if (item.responsibleId !== sellerId) {
+    const previousResponsibleId = item.responsibleId;
+    item.responsibleId = sellerId;
+    item.version++;
+    item.updatedAt = at;
+    activity(crm, item, actor, "updated", {
+      from: item.stage,
+      to: item.stage,
+      previousResponsibleId,
+      responsibleId: sellerId,
+      nextAction: item.nextAction,
+      nextDate: item.nextDate,
+      note: "Vendedor responsável definido para a obra.",
+    }, at);
+  }
+  return crm;
+}
+
 // O histórico é decrescente. Visita e venda do mesmo salvamento aparecem
 // como visita → venda, sem alterar a sequência persistida nem vendas anteriores.
 export function crmTimeline(activities, opportunityId) {
@@ -352,7 +382,7 @@ export function recordCrmVisit(
       workKey: crmWorkKey(work),
       work: snapshot,
       stage: firstActiveStage(crm),
-      responsibleId: visit.userId,
+      responsibleId: visit.sellerId || visit.userId,
       prospectorId: visit.userId,
       products: [],
       pendingProducts: [],
@@ -380,6 +410,20 @@ export function recordCrmVisit(
       },
       at,
     );
+  }
+  if (!historical && visit.sellerId && opportunity.responsibleId !== visit.sellerId) {
+    ensure(team(visit.sellerId), "Selecione um vendedor válido.");
+    const previousResponsibleId = opportunity.responsibleId;
+    opportunity.responsibleId = visit.sellerId;
+    activity(crm, opportunity, actor, "updated", {
+      from: opportunity.stage,
+      to: opportunity.stage,
+      previousResponsibleId,
+      responsibleId: visit.sellerId,
+      nextAction: opportunity.nextAction,
+      nextDate: opportunity.nextDate,
+      note: "Vendedor responsável definido nesta visita.",
+    }, at);
   }
   if (!historical && visit.sold.length && !visit.crmSaleId) {
     ensure(

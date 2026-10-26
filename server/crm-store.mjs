@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { randomUUID } from "node:crypto";
 import {
   applyCrmAction,
   createCrmOpportunity,
@@ -8,6 +9,7 @@ import {
   recordCrmVisit,
 } from "../src/lib/crm.mjs";
 import { normalize, person, productNames } from "../src/lib/domain.mjs";
+import { sellerAssignments } from "../src/lib/seller-notifications.mjs";
 import { validId, fail, requireOwner } from "./policy.mjs";
 
 export async function readCrm(db) {
@@ -31,7 +33,7 @@ export async function readCrm(db) {
   crm.stageOrder = settings?.stage_order || crm.stageOrder;
   return crm;
 }
-async function persistCrm(db, before, after) {
+export async function persistCrm(db, before, after, { notify = true, actorName = "Equipe FAMAC" } = {}) {
   for (const row of after.opportunities) {
     if (
       isDeepStrictEqual(
@@ -73,6 +75,17 @@ async function persistCrm(db, before, after) {
       [row.visitId, row.opportunityId, row],
     );
   }
+  if (notify) for (const row of sellerAssignments(before, after)) {
+    const recipient = await db.query(
+      "SELECT 1 FROM famac.members WHERE team_id=$1 AND active=true AND role='collaborator'",
+      [row.responsibleId],
+    );
+    if (!recipient.rowCount) fail("O vendedor selecionado ainda não possui acesso ativo.");
+    await db.query(
+      "INSERT INTO famac.notifications(id,recipient_team_id,opportunity_id,kind,work_name,actor_name) VALUES ($1,$2,$3,'seller_assigned',$4,$5)",
+      [randomUUID(), row.responsibleId, row.id, row.work.name, actorName],
+    );
+  }
 }
 export async function deleteCrmVisit(db, visitId, actor) {
   const before = await readCrm(db);
@@ -98,7 +111,10 @@ export async function syncVisitCrm(
     ? { name: person(owner), teamId: owner }
     : { ...member, teamId: member.teamId || owner };
   const result = recordCrmVisit(before, visit, work, actor, { historical });
-  await persistCrm(db, before, result.crm);
+  await persistCrm(db, before, result.crm, {
+    notify: !historical,
+    actorName: historical ? person(owner) : member.name,
+  });
   if (result.opportunityId && work.crmOpportunityId !== result.opportunityId)
     await db.query(
       "UPDATE famac.works SET payload=payload || jsonb_build_object('crmOpportunityId',$2::text),updated_at=now() WHERE id=$1",
@@ -150,7 +166,7 @@ export function installCrmRoutes(app, pool, readState) {
         requireOwner(member, work.rows[0].owner_id);
         const before = await readCrm(db);
         const after = createCrmOpportunity(before, work.rows[0].payload, { ...member, teamId: work.rows[0].owner_id }, { stage });
-        await persistCrm(db, before, after);
+        await persistCrm(db, before, after, { actorName: member.name });
         await db.query("UPDATE famac.revision SET value=value+1 WHERE singleton=true");
         await db.query("INSERT INTO famac.operations(id,auth_id) VALUES ($1,$2)", [operationId, member.authId]);
       }
@@ -176,7 +192,7 @@ export function installCrmRoutes(app, pool, readState) {
       } else {
         const before = await readCrm(db);
         const after = changeCrmColumns(before, action, member);
-        await persistCrm(db, before, after);
+        await persistCrm(db, before, after, { actorName: member.name });
         await db.query("UPDATE famac.crm_settings SET stage_labels=$1,stage_order=$2 WHERE singleton=true",
           [after.stageLabels, JSON.stringify(after.stageOrder)]);
         await db.query("UPDATE famac.revision SET value=value+1 WHERE singleton=true");
@@ -249,7 +265,7 @@ export function installCrmRoutes(app, pool, readState) {
           actor,
           productNames(state),
         );
-        await persistCrm(db, before, after);
+        await persistCrm(db, before, after, { actorName: member.name });
         await db.query(
           "UPDATE famac.revision SET value=value+1 WHERE singleton=true",
         );

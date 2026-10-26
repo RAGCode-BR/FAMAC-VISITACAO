@@ -661,7 +661,12 @@ export function Contacts({ data, save, onDetail }) {
 
 function WorkForm({ initial, data, save, onClose }) {
   const [form, setForm] = useState(
-    initial || {
+    initial ? {
+      ...initial,
+      sellerId: data.crm?.opportunities.find((item) =>
+        item.id === initial.crmOpportunityId || item.primaryWorkId === initial.id,
+      )?.responsibleId || initial.sellerId || "",
+    } : {
       name: "",
       type: "Residencial",
       responsible: "",
@@ -671,6 +676,7 @@ function WorkForm({ initial, data, save, onClose }) {
       architectId: "",
       contractorQuery: "",
       architectQuery: "",
+      sellerId: "",
     },
   );
   const [error, setError] = useState("");
@@ -780,6 +786,14 @@ function WorkForm({ initial, data, save, onClose }) {
             }
           />
         </div>
+        <Select label="Vendedor designado" value={form.sellerId || ""}
+          onChange={(sellerId) => update({ sellerId })}>
+          <option value="">Definir depois</option>
+          {TEAM.filter((item) => !data.sellers || data.sellers.includes(item.id)).map((item) => (
+            <option key={item.id} value={item.id}>{item.name}</option>
+          ))}
+        </Select>
+        <small className="form-help">Ao escolher um vendedor, a obra entra no CRM e ele recebe uma notificação.</small>
         {error && (
           <p className="error" role="alert">
             {error}
@@ -886,6 +900,8 @@ export function Works({ data, save, onVisit, onDelete }) {
                       {item.number && `, ${item.number}`}
                     </p>
                     <dl>
+                      <div><dt>Vendedor</dt><dd>{TEAM.find((user) => user.id ===
+                        (data.crm?.opportunities.find((row) => row.id === item.crmOpportunityId || row.primaryWorkId === item.id)?.responsibleId || item.sellerId))?.name || "A definir"}</dd></div>
                       <div>
                         <dt>Empreiteiro</dt>
                         <dd>

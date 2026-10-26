@@ -18,9 +18,36 @@ import {
   crmTimeline,
   markCrmVisitDeleted,
   createCrmOpportunity,
+  assignCrmSeller,
   changeCrmColumns,
   crmActiveStageIds,
 } from "../src/lib/crm.mjs";
+import { sellerAssignments } from "../src/lib/seller-notifications.mjs";
+
+test("vendedor atribuído recebe um aviso por atribuição, sem transferir a prospecção", () => {
+  const work = { id: crypto.randomUUID(), name: "Obra exemplo", street: "Rua A",
+    number: "10", neighborhood: "Centro", city: "Sorriso", state: "MT" };
+  const actor = { role: "collaborator", teamId: "claudionor", name: "Claudionor" };
+  const visit = { ...newVisit("claudionor"), id: crypto.randomUUID(),
+    workId: work.id, workName: work.name, date: today(), offered: ["FORRO"],
+    sellerId: "charles", photos: [{ id: crypto.randomUUID() }], notes: "Anotação privada" };
+  const first = recordCrmVisit(emptyCrm(), visit, work, actor).crm;
+  assert.equal(first.opportunities[0].prospectorId, "claudionor");
+  assert.equal(first.opportunities[0].responsibleId, "charles");
+  assert.deepEqual(sellerAssignments(emptyCrm(), first).map((item) => item.responsibleId), ["charles"]);
+  assert.ok(!JSON.stringify(first).includes("Anotação privada"));
+  assert.ok(!JSON.stringify(first).includes(visit.photos[0].id));
+  const second = recordCrmVisit(first, { ...visit, id: crypto.randomUUID(),
+    userId: "celso", sellerId: "", photos: [], notes: "" }, work,
+    { role: "collaborator", teamId: "celso", name: "Celso" }).crm;
+  assert.equal(second.opportunities[0].responsibleId, "charles");
+  assert.equal(sellerAssignments(first, second).length, 0);
+  const third = assignCrmSeller(second, work, "celso", actor);
+  assert.equal(third.opportunities[0].responsibleId, "celso");
+  assert.deepEqual(sellerAssignments(second, third).map((item) => item.responsibleId), ["celso"]);
+  assert.equal(sellerAssignments(third, assignCrmSeller(third, work, "celso", actor)).length, 0);
+  assert.throws(() => assignCrmSeller(third, work, "desconhecido", actor), /vendedor válido/);
+});
 
 test("excluir coluna com cartões move os ativos e preserva o histórico", () => {
   const actor = { role: "admin", teamId: "claudionor", name: "Administrador" };

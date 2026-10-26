@@ -36,6 +36,7 @@ export default function Crm({
   onLabels,
   onVisit,
   onNew,
+  focus,
 }) {
   const crm = data.crm || emptyCrm();
   const labels = { ...CRM_STAGES, ...crm.stageLabels };
@@ -46,6 +47,11 @@ export default function Crm({
   const [returns, setReturns] = useState("");
   const [mobileStage, setMobileStage] = useState("prospecting");
   const [dialog, setDialog] = useState(null);
+  useEffect(() => {
+    if (!focus?.id) return;
+    const item = crm.opportunities.find((row) => row.id === focus.id && !row.deleted);
+    if (item) setDialog({ id: item.id, type: active(item) ? "update" : "details", stage: item.stage, version: item.version });
+  }, [focus?.nonce]);
   const [addingCard, setAddingCard] = useState(false);
   const [addingColumn, setAddingColumn] = useState(false);
   const [editingLabel, setEditingLabel] = useState(null);
@@ -222,7 +228,7 @@ export default function Crm({
             />
           </div>
           <Select
-            label="Responsável pela oportunidade"
+            label="Vendedor da oportunidade"
             value={responsible}
             onChange={setResponsible}
           >
@@ -461,7 +467,7 @@ export default function Crm({
                               </span>
                               <span>
                                 {person(item.responsibleId)}
-                                <small>Responsável atual</small>
+                                <small>Vendedor responsável</small>
                               </span>
                               <small>
                                 {
@@ -559,7 +565,7 @@ export default function Crm({
                     </div>
                     <div className="crm-archive-meta">
                       <span>
-                        Responsável<strong>{person(item.responsibleId)}</strong>
+                        Vendedor<strong>{person(item.responsibleId)}</strong>
                       </span>
                       <span>
                         Última atualização
@@ -847,7 +853,7 @@ function CrmDialog({
             </a>
           )}
           <small>
-            Prospecção: {person(item.prospectorId)} · Responsável atual:{" "}
+            Prospecção: {person(item.prospectorId)} · Vendedor responsável:{" "}
             {person(item.responsibleId)}
           </small>
         </div>
@@ -950,7 +956,7 @@ function CrmDialog({
               <p>
                 A equipe atualizou esta oportunidade. Etapa atual:{" "}
                 <strong>{labels[item.stage]}</strong>. Seus campos foram
-                mantidos. Responsável atual: {person(item.responsibleId)}.
+                mantidos. Vendedor atual: {person(item.responsibleId)}.
                 Próxima ação atual: {item.nextAction || "Não informada"}
                 {item.nextDate ? ` · ${dateLabel(item.nextDate)}` : ""}.
               </p>
@@ -980,11 +986,11 @@ function CrmDialog({
                     ))}
                 </Select>
                 <Select
-                  label="Responsável atual"
+                  label="Vendedor responsável"
                   value={responsibleId}
                   onChange={setResponsible}
                 >
-                  {TEAM.map((user) => (
+                  {TEAM.filter((user) => !data.sellers || data.sellers.includes(user.id) || user.id === item.responsibleId).map((user) => (
                     <option key={user.id} value={user.id}>
                       {user.name}
                     </option>
@@ -1158,7 +1164,7 @@ function CrmDialog({
               )}
               {event.type === "updated" && (
                 <p>
-                  Responsável: {person(event.responsibleId)}
+                  Vendedor: {person(event.responsibleId)}
                   {event.nextAction ? ` · ${event.nextAction}` : ""}
                   {event.nextDate ? ` · ${dateLabel(event.nextDate)}` : ""}
                 </p>

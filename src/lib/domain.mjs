@@ -148,6 +148,7 @@ export const newVisit = (userId) => ({
   crmEnabled: true,
   crmOpportunityId: "",
   crmSaleId: "",
+  sellerId: "",
 });
 
 export function validateVisit(visit, allowedProducts = PRODUCTS) {
@@ -157,6 +158,8 @@ export function validateVisit(visit, allowedProducts = PRODUCTS) {
     );
   if (!TEAM.some((user) => user.id === visit.userId))
     throw new Error("Selecione um colaborador.");
+  if (visit.sellerId && !TEAM.some((user) => user.id === visit.sellerId))
+    throw new Error("Selecione um vendedor válido.");
   if (!visit.workName.trim())
     throw new Error("Informe o nome ou uma identificação da obra.");
   if (
@@ -242,6 +245,7 @@ export function recordVisit(
     phone: draft.phone.trim(),
     contractorId: draft.contractorId,
     architectId: draft.architectId,
+    sellerId: draft.crmEnabled ? draft.sellerId || existing?.sellerId || "" : existing?.sellerId || "",
     type: draft.type,
     ...Object.fromEntries(
       Object.keys(newAddress()).map((key) => [key, draft[key].trim()]),
