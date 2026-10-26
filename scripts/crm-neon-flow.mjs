@@ -88,7 +88,7 @@ export async function runCrmNeon({
   let dialog = charles.getByRole("dialog");
   await dialog.getByLabel("Etapa da oportunidade").selectOption("negotiating");
   await dialog
-    .getByLabel("Responsável atual", { exact: true })
+    .getByLabel("Vendedor responsável", { exact: true })
     .selectOption("charles");
   await dialog
     .getByLabel("Próxima ação", { exact: true })

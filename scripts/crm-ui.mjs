@@ -49,7 +49,7 @@ const fits = async () =>
     true,
   );
 try {
-  await page.goto("http://127.0.0.1:5174");
+  await page.goto(process.env.TEST_APP_URL || "http://127.0.0.1:5174");
   await page.getByLabel("Colaborador na prévia").waitFor();
   let data = emptyData();
   const names = [
@@ -152,12 +152,12 @@ try {
   await page.getByLabel("Resultado da negociação").selectOption("lost");
   assert.equal(await page.locator(".crm-archive-row").count(), 1);
   await page
-    .getByLabel("Responsável pela oportunidade")
+    .getByLabel("Vendedor da oportunidade")
     .selectOption("charles");
   await page
     .getByText("Nenhuma negociação encerrada", { exact: true })
     .waitFor();
-  await page.getByLabel("Responsável pela oportunidade").selectOption("");
+  await page.getByLabel("Vendedor da oportunidade").selectOption("");
   await page.getByRole("button", { name: /^Em andamento/ }).click();
   await fits();
   await page.screenshot({
@@ -168,7 +168,7 @@ try {
   await open(names[0]);
   await modal.getByLabel("Etapa da oportunidade").selectOption("waiting");
   await modal
-    .getByLabel("Responsável atual", { exact: true })
+    .getByLabel("Vendedor responsável", { exact: true })
     .selectOption("charles");
   await modal
     .getByLabel("Próxima ação", { exact: true })
@@ -179,12 +179,12 @@ try {
     .fill("Arquiteto pediu retorno.");
   await submit();
   await page
-    .getByLabel("Responsável pela oportunidade")
+    .getByLabel("Vendedor da oportunidade")
     .selectOption("charles");
   await page.getByLabel("Buscar oportunidades").fill(names[0]);
   assert.equal(await page.locator(".crm-card").count(), 1);
   await page.getByLabel("Buscar oportunidades").fill("");
-  await page.getByLabel("Responsável pela oportunidade").selectOption("");
+  await page.getByLabel("Vendedor da oportunidade").selectOption("");
   await open(names[0]);
   await modal
     .getByRole("button", { name: "Registrar venda", exact: true })
