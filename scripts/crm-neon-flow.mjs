@@ -5,6 +5,7 @@ export async function runCrmNeon({
   clau,
   charles,
   celso,
+  admin,
   call,
   navigate,
   base,
@@ -60,6 +61,20 @@ export async function runCrmNeon({
     ),
     false,
   );
+  const assignFromAdmin = async (sellerId) => {
+    const current = (await call(admin, "/state")).data;
+    const updated = structuredClone(current);
+    const work = updated.works.find((item) => item.id === opportunity.primaryWorkId);
+    assert.ok(work);
+    work.sellerId = sellerId;
+    assert.equal((await call(admin, "/state", {
+      method: "PUT",
+      body: JSON.stringify({ state: updated, revision: current.revision,
+        operationId: crypto.randomUUID(), actorTeamId: work.ownerId }),
+    })).status, 200);
+  };
+  assert.equal((await call(charles, "/state")).data.crm.opportunities.length, 0);
+  await assignFromAdmin("charles");
   assert.equal(
     (
       await fetch(`${base}/crm/${opportunity.id}/actions`, {
@@ -87,9 +102,6 @@ export async function runCrmNeon({
   await open(charles);
   let dialog = charles.getByRole("dialog");
   await dialog.getByLabel("Etapa da oportunidade").selectOption("negotiating");
-  await dialog
-    .getByLabel("Vendedor responsável", { exact: true })
-    .selectOption("charles");
   await dialog
     .getByLabel("Próxima ação", { exact: true })
     .fill("Retomar com arquiteto");
@@ -192,6 +204,8 @@ export async function runCrmNeon({
     ).status,
     403,
   );
+  assert.equal((await call(celso, "/state")).data.crm.opportunities.length, 0);
+  await assignFromAdmin("celso");
   await celso.reload();
   await celso.locator(".visit-form").waitFor();
   await navigate(celso, "CRM");
@@ -220,6 +234,7 @@ export async function runCrmNeon({
     1000,
   );
   assert.ok(sales.every((item) => item.prospectorId === "claudionor"));
+  await assignFromAdmin("charles");
   await charles.reload();
   await charles.locator(".visit-form").waitFor();
   await navigate(charles, "CRM");
@@ -308,6 +323,6 @@ export async function runCrmNeon({
     .getByText("Claudionor", { exact: true })
     .waitFor();
   console.log(
-    "PASS: CRM real compartilhado por três colaboradores, privado preservado, retornos na programação, conflito sem perder venda, autoria e idempotência; venda parcial, conclusão, visita vinculada e financeiro sem duplicidade",
+    "PASS: CRM real restrito por prospector/vendedor; atribuição pela gestão, autoria e privado preservados; vendas parciais, visita vinculada e financeiro sem duplicidade",
   );
 }

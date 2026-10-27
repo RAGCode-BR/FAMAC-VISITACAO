@@ -20,6 +20,7 @@ export const TEAM = [
   { id: "celso", name: "Celso", initials: "CE" },
   { id: "recepcao", name: "Recepção", initials: "RE" },
   { id: "joao", name: "João", initials: "JO" },
+  { id: "tulio", name: "Túlio", initials: "TU" },
 ];
 export const STAGES = {
   prospecting: "Prospecção",

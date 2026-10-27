@@ -568,6 +568,9 @@
 .crm-prospecting-visit > small { display: block; margin-top: 12px; }
 .crm-prospecting-photos { margin-top: 13px; }
 .crm-prospecting-photos img { height: 125px; }
+.crm-seller-readonly { display: grid; align-content: center; gap: 5px; }
+.crm-seller-readonly span { color: #677793; font-size: 12px; font-weight: 700; }
+.crm-seller-readonly strong { color: #1e2f54; font-size: 14px; }
 @media (max-width: 600px) {
   .crm-prospecting-heading { padding: 14px; }
   .crm-prospecting-visit { padding: 15px 14px; }

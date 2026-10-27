@@ -80,7 +80,7 @@ export function AccessManagement({ account }) {
                 <td>
                   {member.role === "admin"
                     ? "Administração"
-                    : "Próprios registros"}
+                    : member.role === "supervisor" ? "Supervisão" : "Próprios registros"}
                 </td>
                 <td>
                   {member.authId !== account.authId && (

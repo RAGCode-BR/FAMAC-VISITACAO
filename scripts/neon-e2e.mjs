@@ -1000,6 +1000,7 @@ try {
     clau: afterChange.page,
     charles: recovered.page,
     celso: celso.page,
+    admin: management.page,
     call,
     navigate,
     base,

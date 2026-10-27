@@ -26,7 +26,7 @@ import {
   syncVisitCrm,
   persistCrm,
 } from "./crm-store.mjs";
-import { assignCrmSeller } from "../src/lib/crm.mjs";
+import { assignCrmSeller, visibleCrm } from "../src/lib/crm.mjs";
 import {
   productKey,
   productNames,
@@ -103,7 +103,7 @@ async function readState(db, member, since) {
   const state = { version: 1, revision: Number(revision.rows[0].value) };
   if (state.revision === since) return null;
   for (const kind of collections) {
-    const scoped = member.role !== "admin" && kind !== "products";
+    const scoped = !["admin", "supervisor"].includes(member.role) && kind !== "products";
     const conditions = [];
     if (scoped)
       conditions.push(
@@ -123,7 +123,7 @@ async function readState(db, member, since) {
       ownerId: row.owner_id,
     }));
   }
-  state.crm = await readCrm(db);
+  state.crm = visibleCrm(await readCrm(db), member);
   state.sellers = (await db.query(
     "SELECT team_id FROM famac.members WHERE active=true AND role='collaborator' AND team_id IS NOT NULL ORDER BY name",
   )).rows.map((row) => row.team_id);
@@ -137,7 +137,8 @@ async function readState(db, member, since) {
              ORDER BY created_at DESC LIMIT 20
            )) ORDER BY created_at DESC,id DESC`,
         [member.teamId],
-      )).rows
+      )).rows.filter((item) => state.crm.opportunities.some((opportunity) =>
+        opportunity.id === item.opportunityId && !opportunity.deleted))
     : [];
   return state;
 }
@@ -524,7 +525,7 @@ app.put("/state", async (c) => {
           !visitWorkIds.has(record.id)) {
           const crmBefore = await readCrm(db);
           const crmAfter = assignCrmSeller(crmBefore, payload, payload.sellerId,
-            { ...member, teamId: member.teamId || owner, name: member.name });
+            { ...member, teamId: owner, name: member.name });
           await persistCrm(db, crmBefore, crmAfter, { actorName: member.name });
         }
         if (kind === "visits") await syncVisitCrm(db, payload, owner, member);
@@ -640,7 +641,7 @@ app.get("/product-photos/:id/url", async (c) => {
     !row ||
     (!isProductPhotoUsed(row) &&
       !(
-        member.role === "admin" &&
+        ["admin", "supervisor"].includes(member.role) &&
         !row.linked &&
         row.uploaded_by === member.authId
       ))
@@ -703,7 +704,7 @@ async function photoFor(member, id, allowAssignedSeller = false) {
   if (!result.rowCount) fail("Foto não encontrada.", 404);
   const photo = result.rows[0];
   if (photo.visit_deleted === "true") fail("Foto não encontrada.", 404);
-  if (member.role !== "admin" && member.teamId !== photo.owner_id) {
+  if (!["admin", "supervisor"].includes(member.role) && member.teamId !== photo.owner_id) {
     if (!allowAssignedSeller || !photo.linked) fail("Foto indisponível.", 403);
     const assigned = await pool.query(
       `SELECT 1 FROM famac.crm_visit_links link

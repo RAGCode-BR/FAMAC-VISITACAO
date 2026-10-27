@@ -21,6 +21,8 @@ import {
   assignCrmSeller,
   changeCrmColumns,
   crmActiveStageIds,
+  visibleCrm,
+  canSeeCrmOpportunity,
 } from "../src/lib/crm.mjs";
 import { sellerAssignments } from "../src/lib/seller-notifications.mjs";
 
@@ -42,10 +44,12 @@ test("vendedor atribuído recebe um aviso por atribuição, sem transferir a pro
     { role: "collaborator", teamId: "celso", name: "Celso" }).crm;
   assert.equal(second.opportunities[0].responsibleId, "charles");
   assert.equal(sellerAssignments(first, second).length, 0);
-  const third = assignCrmSeller(second, work, "celso", actor);
+  assert.throws(() => assignCrmSeller(second, work, "celso", actor), { status: 403 });
+  const supervisor = { role: "supervisor", teamId: "tulio", name: "Túlio" };
+  const third = assignCrmSeller(second, work, "celso", supervisor);
   assert.equal(third.opportunities[0].responsibleId, "celso");
   assert.deepEqual(sellerAssignments(second, third).map((item) => item.responsibleId), ["celso"]);
-  assert.equal(sellerAssignments(third, assignCrmSeller(third, work, "celso", actor)).length, 0);
+  assert.equal(sellerAssignments(third, assignCrmSeller(third, work, "celso", supervisor)).length, 0);
   assert.throws(() => assignCrmSeller(third, work, "desconhecido", actor), /vendedor válido/);
 });
 
@@ -191,6 +195,44 @@ const act = (crm, action, id = "charles") =>
     actor(id),
     ["FORRO", "GESSO"],
   );
+const manage = (crm, action) => applyCrmAction(crm,
+  crm.opportunities[0].id,
+  { version: crm.opportunities[0].version, ...action },
+  { role: "supervisor", teamId: "tulio", name: "Túlio" },
+  ["FORRO", "GESSO"]);
+test("CRM separa as obras por prospecção ou vendedor sem perder a autoria histórica", () => {
+  const original = seed().crm;
+  const work = { id: crypto.randomUUID(), name: "Obra da equipe", street: "Rua B",
+    number: "22", neighborhood: "Centro", city: "Sorriso", state: "MT" };
+  const other = createCrmOpportunity(original, work, actor("celso"));
+  const first = other.opportunities.find((item) => item.prospectorId === "claudionor");
+  const managed = assignCrmSeller(other,
+    { id: first.primaryWorkId, crmOpportunityId: first.id, ...first.work },
+    "charles", { role: "supervisor", teamId: "tulio", name: "Túlio" });
+  assert.equal(managed.opportunities.find((item) => item.id === first.id).prospectorId, "claudionor");
+  assert.deepEqual(visibleCrm(managed, actor("claudionor")).opportunities.map((item) => item.id), [first.id]);
+  assert.deepEqual(visibleCrm(managed, actor("charles")).opportunities.map((item) => item.id), [first.id]);
+  assert.deepEqual(visibleCrm(managed, actor("celso")).opportunities.map((item) => item.id),
+    [other.opportunities.find((item) => item.prospectorId === "celso").id]);
+  assert.equal(visibleCrm(managed, actor("joao")).activities.length, 0);
+  assert.equal(visibleCrm(managed, { role: "supervisor", teamId: "tulio" }).opportunities.length, 2);
+  assert.equal(visibleCrm(managed, { role: "admin" }).opportunities.length, 2);
+  assert.equal(canSeeCrmOpportunity(managed, first, actor("joao")), false);
+  const linked = structuredClone(managed);
+  linked.visitLinks.push({ visitId: crypto.randomUUID(), opportunityId: first.id, userId: "joao", date: today() });
+  assert.equal(visibleCrm(linked, actor("joao")).opportunities[0].id, first.id);
+});
+test("somente gestão altera o vendedor de um cartão existente", () => {
+  const crm = seed().crm;
+  const item = crm.opportunities[0];
+  const action = { type: "update", version: item.version, stage: item.stage,
+    responsibleId: "charles", nextAction: "", nextDate: "" };
+  assert.throws(() => applyCrmAction(crm, item.id, action, actor("claudionor"), ["FORRO"]), { status: 403 });
+  const changed = applyCrmAction(crm, item.id, action,
+    { role: "supervisor", teamId: "tulio", name: "Túlio" }, ["FORRO"]);
+  assert.equal(changed.opportunities[0].responsibleId, "charles");
+  assert.equal(changed.opportunities[0].prospectorId, "claudionor");
+});
 test("visitas alimentam uma oportunidade por obra e não compartilham fotos nem notas privadas", () => {
   let data = seed();
   const opp = data.crm.opportunities[0];
@@ -246,7 +288,7 @@ test("excluir uma visita oculta sua ação, mantém a venda e preserva a auditor
 });
 test("equipe negocia e vende parcialmente; o último produto conclui sem duplicar valores", () => {
   let data = seed();
-  let crm = act(data.crm, {
+  let crm = manage(data.crm, {
     type: "update",
     stage: "waiting",
     responsibleId: "charles",
@@ -457,7 +499,7 @@ test("concluir venda parcial encerra apenas os itens restantes e reabrir permite
 
 test("visita resolve retorno vencido sem apagar o histórico e relacionamento legado é vinculado à obra conhecida", () => {
   let data = seed();
-  data.crm = act(data.crm, {
+  data.crm = manage(data.crm, {
     type: "update",
     stage: "waiting",
     responsibleId: "charles",

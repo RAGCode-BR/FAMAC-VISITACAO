@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 import { randomUUID } from "node:crypto";
 import {
   applyCrmAction,
+  canSeeCrmOpportunity,
   createCrmOpportunity,
   changeCrmColumns,
   emptyCrm,
@@ -82,6 +83,10 @@ export async function persistCrm(db, before, after, { notify = true, actorName =
     );
     if (!recipient.rowCount) fail("O vendedor selecionado ainda não possui acesso ativo.");
     await db.query(
+      "UPDATE famac.notifications SET read_at=now() WHERE opportunity_id=$1 AND read_at IS NULL",
+      [row.id],
+    );
+    await db.query(
       "INSERT INTO famac.notifications(id,recipient_team_id,opportunity_id,kind,work_name,actor_name) VALUES ($1,$2,$3,'seller_assigned',$4,$5)",
       [randomUUID(), row.responsibleId, row.id, row.work.name, actorName],
     );
@@ -158,7 +163,7 @@ export function installCrmRoutes(app, pool, readState) {
     );
     if (!opportunity.rowCount || opportunity.rows[0].payload.deleted)
       fail("Oportunidade não encontrada.", 404);
-    if (member.role !== "admin" &&
+    if (!["admin", "supervisor"].includes(member.role) &&
       member.teamId !== opportunity.rows[0].payload.responsibleId)
       fail("Somente o vendedor designado pode consultar os registros da prospecção.", 403);
     const rows = await pool.query(
@@ -213,7 +218,7 @@ export function installCrmRoutes(app, pool, readState) {
   });
   app.post("/crm/columns", async (c) => {
     const member = c.get("member");
-    if (member.role !== "admin") fail("Somente a administração pode gerenciar colunas.", 403);
+    if (!["admin", "supervisor"].includes(member.role)) fail("Somente a gestão pode gerenciar colunas.", 403);
     const { action, operationId } = await c.req.json();
     if (!validId(operationId) || !action || !["add", "delete"].includes(action.type))
       fail("Operação de coluna inválida.");
@@ -241,7 +246,7 @@ export function installCrmRoutes(app, pool, readState) {
   });
   app.put("/crm/stage-labels", async (c) => {
     const member = c.get("member");
-    if (member.role !== "admin") fail("Somente a administração pode renomear colunas.", 403);
+    if (!["admin", "supervisor"].includes(member.role)) fail("Somente a gestão pode renomear colunas.", 403);
     const { labels, operationId } = await c.req.json();
     if (!validId(operationId) || !labels || typeof labels !== "object" || Array.isArray(labels))
       fail("Nomes de colunas inválidos.");
@@ -291,6 +296,9 @@ export function installCrmRoutes(app, pool, readState) {
           fail("Operação inválida.", 403);
       } else {
         const before = await readCrm(db);
+        if (!canSeeCrmOpportunity(before,
+          before.opportunities.find((item) => item.id === opportunityId), member))
+          fail("Oportunidade indisponível para este usuário.", 403);
         const state = await readState(db, member);
         const actor = { ...member, teamId: member.teamId || body.actorTeamId };
         const after = applyCrmAction(

@@ -18,6 +18,7 @@ export default function VisitForm({
   data,
   userId,
   canAssign = true,
+  canManageSeller = true,
   save,
   plan,
   onSaved,
@@ -359,7 +360,7 @@ export default function VisitForm({
               }
             />
           </div>
-          {form.crmEnabled && (
+          {form.crmEnabled && (!crmOpportunity || canManageSeller) && (
             <Select label="Vendedor designado" value={form.sellerId || form.userId}
               onChange={(sellerId) => update({ sellerId })}>
               {TEAM.filter((item) => !data.sellers || data.sellers.includes(item.id)).map((item) => (
@@ -367,7 +368,10 @@ export default function VisitForm({
               ))}
             </Select>
           )}
-          {form.crmEnabled && <small className="form-help">O vendedor escolhido receberá uma notificação da oportunidade.</small>}
+          {form.crmEnabled && crmOpportunity && !canManageSeller &&
+            <p className="form-help">Vendedor responsável: <strong>{TEAM.find((item) => item.id === crmOpportunity.responsibleId)?.name}</strong>. Alterações de vendedor são feitas por Túlio ou pela administração no CRM.</p>}
+          {form.crmEnabled && (!crmOpportunity || canManageSeller) &&
+            <small className="form-help">Uma nova atribuição de vendedor gera uma notificação da oportunidade.</small>}
         </section>
         <section className="panel form-section">
           <div className="section-heading">

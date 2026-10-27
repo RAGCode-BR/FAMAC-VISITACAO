@@ -37,7 +37,7 @@ const NAV = [
 ];
 const PAGE = {
   crm: [
-    "CRM COMPARTILHADO",
+    "CRM DE OPORTUNIDADES",
     "Uma equipe. Oportunidades em movimento.",
     "Da primeira visita ao fechamento, cada próximo passo tem seu lugar.",
   ],
@@ -113,6 +113,8 @@ class AppBoundary extends React.Component {
 
 function App({ account, onLogout }) {
   const canAssign = !account || account.role === "admin";
+  const canManageSeller = !account || ["admin", "supervisor"].includes(account.role);
+  const canManageCatalog = canManageSeller;
   const [data, setData] = useState(emptyData);
   const dataRef = useRef(data);
   const saving = useRef(false);
@@ -345,7 +347,7 @@ function App({ account, onLogout }) {
   };
   const user = TEAM.find((item) => item.id === userId);
   const operationalData =
-    account?.role === "admin"
+    ["admin", "supervisor"].includes(account?.role)
       ? {
           ...data,
           ...Object.fromEntries(
@@ -553,6 +555,7 @@ function App({ account, onLogout }) {
               data={operationalData}
               userId={userId}
               canAssign={!account}
+              canManageSeller={canManageSeller}
               save={save}
               plan={activePlan}
               onDirty={setDirty}
@@ -592,7 +595,7 @@ function App({ account, onLogout }) {
             </section>
           )}
           {page === "works" && (
-            <Works data={operationalData} save={save} onVisit={startVisit} onDelete={deleteRecord} />
+            <Works data={operationalData} save={save} onVisit={startVisit} onDelete={deleteRecord} canManageSeller={canManageSeller} />
           )}
           {page === "crm" && (
             <Crm
@@ -636,7 +639,7 @@ function App({ account, onLogout }) {
             />
           )}
           {page === "catalog" && (
-            <Catalog data={data} save={save} canManage={canAssign} />
+            <Catalog data={data} save={save} canManage={canManageCatalog} />
           )}
           {page === "team" && canAssign && (
             <Team

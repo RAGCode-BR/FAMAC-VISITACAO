@@ -659,13 +659,13 @@ export function Contacts({ data, save, onDetail }) {
   );
 }
 
-function WorkForm({ initial, data, save, onClose }) {
+function WorkForm({ initial, data, save, onClose, canManageSeller = true }) {
+  const existingOpportunity = data.crm?.opportunities.find((item) =>
+    item.id === initial?.crmOpportunityId || item.primaryWorkId === initial?.id);
   const [form, setForm] = useState(
     initial ? {
       ...initial,
-      sellerId: data.crm?.opportunities.find((item) =>
-        item.id === initial.crmOpportunityId || item.primaryWorkId === initial.id,
-      )?.responsibleId || initial.sellerId || "",
+      sellerId: existingOpportunity?.responsibleId || initial.sellerId || "",
     } : {
       name: "",
       type: "Residencial",
@@ -786,13 +786,15 @@ function WorkForm({ initial, data, save, onClose }) {
             }
           />
         </div>
-        <Select label="Vendedor designado" value={form.sellerId || ""}
-          onChange={(sellerId) => update({ sellerId })}>
-          <option value="">Definir depois</option>
-          {TEAM.filter((item) => !data.sellers || data.sellers.includes(item.id)).map((item) => (
-            <option key={item.id} value={item.id}>{item.name}</option>
-          ))}
-        </Select>
+        {(!existingOpportunity || canManageSeller)
+          ? <Select label="Vendedor designado" value={form.sellerId || ""}
+              onChange={(sellerId) => update({ sellerId })}>
+              <option value="">Definir depois</option>
+              {TEAM.filter((item) => !data.sellers || data.sellers.includes(item.id)).map((item) => (
+                <option key={item.id} value={item.id}>{item.name}</option>
+              ))}
+            </Select>
+          : <p className="form-help">Vendedor responsável: <strong>{TEAM.find((item) => item.id === form.sellerId)?.name}</strong>. Alterações são feitas por Túlio ou pela administração no CRM.</p>}
         <small className="form-help">Ao escolher um vendedor, a obra entra no CRM e ele recebe uma notificação.</small>
         {error && (
           <p className="error" role="alert">
@@ -812,7 +814,7 @@ function WorkForm({ initial, data, save, onClose }) {
   );
 }
 
-export function Works({ data, save, onVisit, onDelete }) {
+export function Works({ data, save, onVisit, onDelete, canManageSeller = true }) {
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
   const [type, setType] = useState("");
@@ -994,6 +996,7 @@ export function Works({ data, save, onVisit, onDelete }) {
           initial={editing.id ? editing : undefined}
           data={data}
           save={save}
+          canManageSeller={canManageSeller}
           onClose={() => setEditing(null)}
         />
       )}

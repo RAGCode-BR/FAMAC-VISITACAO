@@ -153,12 +153,12 @@ export default function Crm({
         <div>
           <span className="crm-shared">
             <Icon name="users" size={15} />
-            Compartilhado com a equipe
+            {account?.role === "collaborator" ? "Suas prospecções e vendas" : "Visão da equipe"}
           </span>
         </div>
         <div className="crm-intro-actions">
           <button className="button secondary" onClick={() => setAddingCard(true)}>Adicionar cartão</button>
-          {(!account || account.role === "admin") &&
+          {(!account || ["admin", "supervisor"].includes(account.role)) &&
             <button className="button secondary" onClick={() => setAddingColumn(true)}><Icon name="plus" size={16} />Adicionar coluna</button>}
           <button className="button primary" onClick={onNew}><Icon name="plus" size={17} />Registrar visita</button>
         </div>
@@ -331,7 +331,7 @@ export default function Crm({
                       <span className="crm-column-title">
                         <i />
                         {label}
-                        {(!account || account.role === "admin") && (
+                        {(!account || ["admin", "supervisor"].includes(account.role)) && (
                           <>
                             <button type="button" className="crm-column-edit"
                               aria-label={`Renomear coluna ${label}`} title={`Renomear coluna ${label}`}
@@ -988,17 +988,22 @@ function CrmDialog({
                       </option>
                     ))}
                 </Select>
-                <Select
-                  label="Vendedor responsável"
-                  value={responsibleId}
-                  onChange={setResponsible}
-                >
-                  {TEAM.filter((user) => !data.sellers || data.sellers.includes(user.id) || user.id === item.responsibleId).map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name}
-                    </option>
-                  ))}
-                </Select>
+                {!account || ["admin", "supervisor"].includes(account.role)
+                  ? <Select
+                      label="Vendedor responsável"
+                      value={responsibleId}
+                      onChange={setResponsible}
+                    >
+                      {TEAM.filter((user) => !data.sellers || data.sellers.includes(user.id) || user.id === item.responsibleId).map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.name}
+                        </option>
+                      ))}
+                    </Select>
+                  : <div className="crm-seller-readonly">
+                      <span>Vendedor responsável</span>
+                      <strong>{person(item.responsibleId)}</strong>
+                    </div>}
               </div>
               <div className="fields two">
                 <Field
@@ -1082,7 +1087,7 @@ function CrmDialog({
                 label="Quem realizou a venda"
                 value={seller}
                 onChange={setSeller}
-                disabled={!!account && account.role !== "admin"}
+                disabled={!!account && !["admin", "supervisor"].includes(account.role)}
               >
                 {TEAM.map((user) => (
                   <option key={user.id} value={user.id}>
@@ -1180,7 +1185,7 @@ function CrmDialog({
   );
 }
 function ProspectingContext({ opportunity, account }) {
-  const allowed = !account || account.role === "admin" ||
+  const allowed = !account || ["admin", "supervisor"].includes(account.role) ||
     account.teamId === opportunity.responsibleId;
   const key = `${opportunity.id}:${opportunity.version}`;
   const [result, setResult] = useState({ key: "", visits: null, error: "" });

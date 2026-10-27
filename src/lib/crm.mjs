@@ -111,6 +111,9 @@ export function assignCrmSeller(current, work, sellerId, actor, at = new Date().
   let item = crm.opportunities.find((row) =>
     row.id === work.crmOpportunityId || row.primaryWorkId === work.id || row.workKey === crmWorkKey(work),
   );
+  if (item && !item.deleted && item.responsibleId !== sellerId)
+    ensure(["admin", "supervisor"].includes(actor.role),
+      "Somente Túlio e a administração podem alterar o vendedor de uma oportunidade existente.", 403);
   if (!item || item.deleted) {
     crm = createCrmOpportunity(crm, work, actor, { at });
     item = crm.opportunities.find((row) =>
@@ -412,6 +415,8 @@ export function recordCrmVisit(
     );
   }
   if (!historical && visit.sellerId && opportunity.responsibleId !== visit.sellerId) {
+    ensure(["admin", "supervisor"].includes(actor.role),
+      "Somente Túlio e a administração podem alterar o vendedor de uma oportunidade existente.", 403);
     ensure(team(visit.sellerId), "Selecione um vendedor válido.");
     const previousResponsibleId = opportunity.responsibleId;
     opportunity.responsibleId = visit.sellerId;
@@ -617,7 +622,7 @@ export function applyCrmAction(
       "Reabra a oportunidade antes de registrar outra venda.",
     );
     ensure(
-      actor.role === "admin" || actor.teamId === input.sellerTeamId,
+      ["admin", "supervisor"].includes(actor.role) || actor.teamId === input.sellerTeamId,
       "A venda deve ficar no seu nome. A administração pode registrar para outro colaborador.",
       403,
     );
@@ -633,6 +638,12 @@ export function applyCrmAction(
       "Escolha uma etapa em andamento. Para concluir, registre a venda ou o motivo do encerramento.",
     );
     ensure(team(input.responsibleId), "Selecione o responsável atual.");
+    ensure(
+      item.responsibleId === input.responsibleId ||
+        ["admin", "supervisor"].includes(actor.role),
+      "Somente Túlio e a administração podem alterar o vendedor responsável no CRM.",
+      403,
+    );
     const nextAction = text(input.nextAction || "");
     const nextDate = input.nextDate || "";
     ensure(
@@ -761,6 +772,30 @@ export function reconcileLocalCrm(data, actor, historical = false) {
       );
   }
   return { ...data, crm, works };
+}
+
+export function canSeeCrmOpportunity(crm, opportunity, member) {
+  if (!opportunity) return false;
+  if (!member || ["admin", "supervisor"].includes(member.role)) return true;
+  return opportunity.prospectorId === member.teamId ||
+    opportunity.responsibleId === member.teamId ||
+    crm.visitLinks.some((link) =>
+      link.opportunityId === opportunity.id &&
+      link.userId === member.teamId && !link.deleted);
+}
+
+export function visibleCrm(crm, member) {
+  if (!member || ["admin", "supervisor"].includes(member.role)) return crm;
+  const ids = new Set(crm.opportunities
+    .filter((item) => canSeeCrmOpportunity(crm, item, member))
+    .map((item) => item.id));
+  return {
+    ...crm,
+    opportunities: crm.opportunities.filter((item) => ids.has(item.id)),
+    activities: crm.activities.filter((item) => ids.has(item.opportunityId)),
+    sales: crm.sales.filter((item) => ids.has(item.opportunityId)),
+    visitLinks: crm.visitLinks.filter((item) => ids.has(item.opportunityId)),
+  };
 }
 
 // Um fechamento vinculado à visita entra apenas uma vez no consolidado.

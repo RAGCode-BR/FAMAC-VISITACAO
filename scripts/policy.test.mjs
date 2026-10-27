@@ -38,6 +38,7 @@ test("somente a administração pode operar em nome de outro colaborador", () =>
   assert.doesNotThrow(() => requireOwner(member, "charles"));
   assert.throws(() => requireOwner(member, "celso"), { status: 403 });
   assert.doesNotThrow(() => requireOwner({ role: "admin" }, "celso"));
+  assert.doesNotThrow(() => requireOwner({ role: "supervisor", teamId: "tulio" }, "celso"));
   assert.throws(() => requireOwner({ role: "admin" }, "qualquer-pessoa"));
 });
 test("o servidor recusa identificadores repetidos ou inválidos", () => {
@@ -53,6 +54,7 @@ test("produtos exigem administração e nomes únicos inclusive acentos e espaç
     status: 403,
   });
   assert.doesNotThrow(() => requireCatalogAdmin({ role: "admin" }));
+  assert.doesNotThrow(() => requireCatalogAdmin({ role: "supervisor", teamId: "tulio" }));
   assert.throws(
     () =>
       validateState({

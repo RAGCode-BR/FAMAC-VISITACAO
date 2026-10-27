@@ -22,11 +22,11 @@ export function fail(message, status = 400) {
 }
 export function requireOwner(member, ownerId) {
   if (!TEAM.some((item) => item.id === ownerId)) fail("Colaborador inválido.");
-  if (member.role !== "admin" && member.teamId !== ownerId)
+  if (!["admin", "supervisor"].includes(member.role) && member.teamId !== ownerId)
     fail("Você só pode acessar seus próprios registros.", 403);
 }
 export function requireCatalogAdmin(member) {
-  if (member.role !== "admin")
+  if (!["admin", "supervisor"].includes(member.role))
     fail("Somente a administração pode gerenciar produtos.", 403);
 }
 export function requireContactWrite(member, ownerId, previous, next) {
