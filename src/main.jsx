@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { TEAM, emptyData, today } from "./lib/domain.mjs";
+import { TEAM, contactOrigin, emptyData, today } from "./lib/domain.mjs";
 import { repository } from "./lib/repository.mjs";
 import { isSharedContact } from "./lib/contacts.mjs";
 import { Badge, Icon, Modal } from "./components/ui.jsx";
@@ -26,6 +26,7 @@ import "./auth.css";
 const NAV = [
   ["overview", "grid", "Visão geral"],
   ["new", "plus", "Nova visita"],
+  ["lead", "phone", "Novo lead"],
   ["visits", "visit", "Visitas realizadas"],
   ["crm", "kanban", "CRM"],
   ["schedule", "calendar", "Programação"],
@@ -36,6 +37,7 @@ const NAV = [
   ["team", "users", "Colaboradores"],
 ];
 const PAGE = {
+  lead: ["NOVO LEAD", "Cada contato abre uma possibilidade.", "Registre o atendimento por telefone e acompanhe o próximo passo no CRM."],
   crm: [
     "CRM DE OPORTUNIDADES",
     "Uma equipe. Oportunidades em movimento.",
@@ -132,6 +134,8 @@ function App({ account, onLogout }) {
   const [deleteError, setDeleteError] = useState("");
   const [activePlan, setActivePlan] = useState(null);
   const [formKey, setFormKey] = useState(0);
+  const [leadFormKey, setLeadFormKey] = useState(0);
+  const [leadFormStarted, setLeadFormStarted] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [pendingPlan, setPendingPlan] = useState(null);
   const navRef = useRef(null);
@@ -306,7 +310,7 @@ function App({ account, onLogout }) {
     try {
       await persist(
         () => repository.deleteVisit(deletingVisit.id),
-        "Visita excluída.",
+        contactOrigin(deletingVisit) === "lead" ? "Lead excluído." : "Visita excluída.",
       );
       setDeletingVisit(null);
     } catch (error) {
@@ -316,6 +320,7 @@ function App({ account, onLogout }) {
     }
   };
   const navigate = (next) => {
+    if (next === "lead") setLeadFormStarted(true);
     setPage(next);
     setNavOpen(false);
     window.scrollTo({ top: 0 });
@@ -407,6 +412,7 @@ function App({ account, onLogout }) {
       )}
       <aside className={`sidebar ${navOpen ? "open" : ""}`} ref={navRef}>
         <div className="sidebar-brand">
+          <img className="sidebar-mini-logo" src={`${import.meta.env.BASE_URL}favicon.svg`} alt="FAMAC" />
           <div className="sidebar-logo-frame">
             <img
               src={`${import.meta.env.BASE_URL}famac-logo.jpg`}
@@ -426,6 +432,7 @@ function App({ account, onLogout }) {
             <button
               key={id}
               aria-label={label}
+              title={label}
               className={`${page === id ? "active" : ""} ${id === "new" ? "new-visit-nav" : ""}`}
               aria-current={page === id ? "page" : undefined}
               onClick={() => navigate(id)}
@@ -566,8 +573,25 @@ function App({ account, onLogout }) {
               }}
             />
           </div>
+          {leadFormStarted && <div hidden={page !== "lead"}>
+            <VisitForm
+              key={leadFormKey}
+              mode="lead"
+              data={operationalData}
+              userId={userId}
+              canAssign={!account}
+              canManageSeller={canManageSeller}
+              save={save}
+              onDirty={setDirty}
+              onSaved={() => setLeadFormKey((key) => key + 1)}
+            />
+            <section className="panel">
+              <div className="panel-heading"><div><h2>Leads recebidos</h2><p>Histórico dos contatos por telefone.</p></div></div>
+              <VisitsTable visits={data.visits.filter((item) => contactOrigin(item) === "lead")} mode="lead" pageSize={6} onDetail={setDetail} onDelete={(visit) => { setDeletingVisit(visit); setDeleteError(""); }} />
+            </section>
+          </div>}
           {page === "overview" && (
-            <Dashboard data={data} navigate={navigate} onDetail={setDetail} />
+            <Dashboard data={{ ...data, visits: data.visits.filter((item) => contactOrigin(item) === "visit") }} navigate={navigate} onDetail={setDetail} />
           )}
           {page === "visits" && (
             <section className="panel">
@@ -585,7 +609,7 @@ function App({ account, onLogout }) {
                 </button>
               </div>
               <VisitsTable
-                visits={data.visits}
+                visits={data.visits.filter((item) => contactOrigin(item) === "visit")}
                 pageSize={6}
                 onDetail={setDetail}
                 onDelete={(visit) => {
@@ -676,14 +700,14 @@ function App({ account, onLogout }) {
       {detail && <VisitDetail visit={detail} onClose={() => setDetail(null)} />}
       {deletingVisit && (
         <Modal
-          title="Excluir visita?"
+          title={contactOrigin(deletingVisit) === "lead" ? "Excluir lead?" : "Excluir visita?"}
           onClose={() => !deleteBusy && setDeletingVisit(null)}
         >
           <p>
-            A visita de <strong>{deletingVisit.workName}</strong>, realizada em{" "}
+            {contactOrigin(deletingVisit) === "lead" ? "O lead" : "A visita"} de <strong>{deletingVisit.workName}</strong>, {contactOrigin(deletingVisit) === "lead" ? "registrado" : "realizada"} em{" "}
             {new Date(`${deletingVisit.date}T12:00:00`).toLocaleDateString(
               "pt-BR",
-            )}, sairá das listas e dos indicadores de visitas.
+            )}, sairá das listas e dos indicadores correspondentes.
           </p>
           <p>O registro original ficará preservado para auditoria.</p>
           {deletingVisit.sold.length > 0 && (
@@ -703,7 +727,7 @@ function App({ account, onLogout }) {
               disabled={deleteBusy}
               onClick={deleteVisit}
             >
-              {deleteBusy ? "Excluindo…" : "Excluir visita"}
+              {deleteBusy ? "Excluindo…" : contactOrigin(deletingVisit) === "lead" ? "Excluir lead" : "Excluir visita"}
             </button>
           </footer>
         </Modal>

@@ -6,6 +6,7 @@ import {
   addressLabel,
   dateLabel,
   money,
+  newLead,
   newVisit,
   recordVisit,
   today,
@@ -13,10 +14,12 @@ import {
 import { AddressFields, ContactPicker, Field, Icon, Select } from "./ui.jsx";
 import { preparePhoto } from "../lib/photo.mjs";
 import { ProductGallery } from "./ProductPhotos.jsx";
+import { crmWorkKey } from "../lib/crm.mjs";
 
 export default function VisitForm({
   data,
   userId,
+  mode = "visit",
   canAssign = true,
   canManageSeller = true,
   save,
@@ -24,8 +27,10 @@ export default function VisitForm({
   onSaved,
   onDirty,
 }) {
+  const leadMode = mode === "lead";
+  const fresh = () => leadMode ? newLead(userId) : newVisit(userId);
   const initial = () => {
-    const base = newVisit(userId);
+    const base = fresh();
     const opportunity = data.crm?.opportunities.find(
       (item) => item.id === plan?.crmOpportunityId,
     );
@@ -74,6 +79,7 @@ export default function VisitForm({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [sellerTouched, setSellerTouched] = useState(false);
   const errorRef = useRef(null);
   const photoRef = useRef(null);
   const cameraRef = useRef(null);
@@ -89,9 +95,10 @@ export default function VisitForm({
   };
   const change = (key) => (event) => update({ [key]: event.target.value });
   const chooseWork = (id) => {
+    setSellerTouched(false);
     const work = data.works.find((item) => item.id === id);
     if (!work) {
-      const empty = newVisit(form.userId);
+      const empty = leadMode ? newLead(form.userId) : newVisit(form.userId);
       update(
         Object.fromEntries(
           [
@@ -149,7 +156,7 @@ export default function VisitForm({
     event.target.value = "";
     if (!files.length) return;
     if (form.photos.length + files.length > 6)
-      return setError("Adicione no máximo 6 fotos por visita.");
+      return setError(`Adicione no máximo 6 fotos por ${leadMode ? "lead" : "visita"}.`);
     setPhotoBusy(true);
     setError("");
     try {
@@ -178,12 +185,20 @@ export default function VisitForm({
         );
       setBusy(true);
       await save(
-        (current) => recordVisit(current, form),
-        "Visita registrada com sucesso.",
+        (current) => recordVisit(current, {
+          ...form,
+          source: mode,
+          crmEnabled: true,
+          crmOpportunityId: form.crmOpportunityId || crmOpportunity?.id || "",
+          sellerId: crmOpportunity && (!canManageSeller || !sellerTouched)
+            ? crmOpportunity.responsibleId
+            : form.sellerId,
+        }),
+        leadMode ? "Lead registrado com sucesso." : "Visita registrada com sucesso.",
       );
       dirty.current = false;
       onDirty(false);
-      setForm(newVisit(userId));
+      setForm(fresh());
       onSaved();
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (cause) {
@@ -193,12 +208,16 @@ export default function VisitForm({
       setBusy(false);
     }
   };
+  const workKey = form.street && form.neighborhood && form.city && form.state
+    ? crmWorkKey({ ...form, name: form.workName }) : "";
   const crmOpportunity = data.crm?.opportunities.find(
-    (item) => item.id === form.crmOpportunityId,
+    (item) => !item.deleted && (item.id === form.crmOpportunityId ||
+      (form.workId && item.primaryWorkId === form.workId) ||
+      (workKey && item.workKey === workKey)),
   );
   const linkableSales = (data.crm?.sales || []).filter(
     (sale) =>
-      sale.opportunityId === form.crmOpportunityId &&
+      sale.opportunityId === (crmOpportunity?.id || form.crmOpportunityId) &&
       !sale.sourceVisitId &&
       sale.sellerTeamId === form.userId,
   );
@@ -217,14 +236,14 @@ export default function VisitForm({
           <div className="section-heading">
             <span className="section-number">01</span>
             <div>
-              <h2>A obra e a visita</h2>
-              <p>Um novo endereço. Muitas possibilidades.</p>
+              <h2>{leadMode ? "A obra e o contato" : "A obra e a visita"}</h2>
+              <p>{leadMode ? "Atenda, registre e encaminhe a oportunidade." : "Um novo endereço. Muitas possibilidades."}</p>
             </div>
             <Icon name="building" />
           </div>
           <div className="fields two">
             <Field
-              label="Data da visita"
+              label={leadMode ? "Data do contato" : "Data da visita"}
               type="date"
               value={form.date}
               onChange={change("date")}
@@ -232,7 +251,7 @@ export default function VisitForm({
               required
             />
             <Select
-              label="Colaborador"
+              label={leadMode ? "Atendente" : "Colaborador"}
               disabled={!canAssign}
               value={form.userId}
               onChange={(userId) => update({ userId, ...(form.sellerId === form.userId ? { sellerId: userId } : {}) })}
@@ -251,7 +270,7 @@ export default function VisitForm({
               value={form.workId}
               onChange={chooseWork}
             >
-              <option value="">Cadastrar uma nova obra nesta visita</option>
+              <option value="">{leadMode ? "Cadastrar nova obra neste lead" : "Cadastrar uma nova obra nesta visita"}</option>
               {data.works.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name} · {item.neighborhood}
@@ -361,8 +380,8 @@ export default function VisitForm({
             />
           </div>
           {form.crmEnabled && (!crmOpportunity || canManageSeller) && (
-            <Select label="Vendedor designado" value={form.sellerId || form.userId}
-              onChange={(sellerId) => update({ sellerId })}>
+            <Select label="Vendedor designado" value={crmOpportunity && !sellerTouched ? crmOpportunity.responsibleId : form.sellerId || form.userId}
+              onChange={(sellerId) => { setSellerTouched(true); update({ sellerId }); }}>
               {TEAM.filter((item) => !data.sellers || data.sellers.includes(item.id)).map((item) => (
                 <option key={item.id} value={item.id}>{item.name}</option>
               ))}
@@ -380,7 +399,7 @@ export default function VisitForm({
               <h2>Produtos e oportunidades</h2>
               <p>
                 {form.stage === "relationship"
-                  ? "Em visitas de relacionamento, os produtos são opcionais."
+                  ? leadMode ? "Em contatos de relacionamento, os produtos são opcionais." : "Em visitas de relacionamento, os produtos são opcionais."
                   : form.stage === "closing"
                     ? "Marque os produtos oferecidos e os vendidos neste fechamento."
                     : "Marque os produtos oferecidos nesta prospecção."}
@@ -390,16 +409,14 @@ export default function VisitForm({
           </div>
           <div className="fields two">
             <Select
-              label="Tipo de visita"
+              label={leadMode ? "Tipo de contato" : "Tipo de visita"}
               disabled={!!form.crmSaleId}
               value={form.stage}
               onChange={(stage) =>
                 update({
                   stage,
                   ...(stage === "closing" ? {} : { sold: [], saleValue: "", crmSaleId: "" }),
-                  crmEnabled: form.crmOpportunityId
-                    ? true
-                    : stage !== "relationship",
+                  crmEnabled: true,
                 })
               }
             >
@@ -499,7 +516,7 @@ export default function VisitForm({
                 value={form.saleValue}
                 onChange={change("saleValue")}
                 placeholder="0,00"
-                hint="Opcional. Valor total da visita."
+                hint={leadMode ? "Opcional. Valor total do contato." : "Opcional. Valor total da visita."}
               />
             </div>
           )}
@@ -512,69 +529,7 @@ export default function VisitForm({
               placeholder="Interesses, necessidades e detalhes que ajudam no próximo contato…"
             />
           </Field>
-          <div className="visit-crm-choice">
-            <label>
-              <input
-                type="checkbox"
-                checked={form.crmEnabled}
-                disabled={!!form.crmOpportunityId}
-                onChange={(event) =>
-                  update({ crmEnabled: event.target.checked })
-                }
-              />
-              Acompanhar esta obra no CRM
-            </label>
-            <small>
-              Compartilha com a equipe os contatos da obra, o endereço e os
-              produtos. O vendedor designado também poderá consultar as fotos e
-              anotações desta visita pelo CRM.
-            </small>
-            {form.crmEnabled && (
-              <Select
-                label="Oportunidade da equipe"
-                value={form.crmOpportunityId}
-                onChange={(id) => {
-                  const item = data.crm?.opportunities.find(
-                    (row) => row.id === id,
-                  );
-                  const own = data.works.find(
-                    (row) =>
-                      row.crmOpportunityId === id ||
-                      row.id === item?.primaryWorkId,
-                  );
-                  update(
-                    item
-                      ? {
-                          ...item.work,
-                          workName: item.work.name,
-                          workId: own?.id || "",
-                          crmOpportunityId: id,
-                          crmSaleId: "",
-                          sellerId: item.responsibleId,
-                          contractorQuery: item.work.contractorName,
-                          architectQuery: item.work.architectName,
-                        }
-                      : { crmOpportunityId: "", crmSaleId: "" },
-                  );
-                }}
-              >
-                <option value="">
-                  Criar ou localizar pela obra e endereço
-                </option>
-                {(data.crm?.opportunities || []).map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.work.name} · {item.work.neighborhood} ·{" "}
-                    {item.work.city}
-                  </option>
-                ))}
-              </Select>
-            )}
-            {crmOpportunity && (
-              <small>
-                Vinculada a {crmOpportunity.work.name}. Esta visita atualiza a
-                oportunidade existente.
-              </small>
-            )}
+          {(!!linkableSales.length || !!form.crmSaleId) && <div className="visit-crm-choice">
             {!!linkableSales.length && (
               <Select
                 label="Vincular venda já registrada"
@@ -607,11 +562,11 @@ export default function VisitForm({
             )}
             {form.crmSaleId && (
               <small>
-                Este fechamento será vinculado à visita e não será contado
+                Este fechamento será vinculado ao registro e não será contado
                 novamente. Produtos: {form.sold.join(", ")}.
               </small>
             )}
-          </div>
+          </div>}
         </section>
         <section className="panel form-section">
           <div className="section-heading">
@@ -713,7 +668,7 @@ export default function VisitForm({
             />
             <Icon name="calendar" />
             <span>
-              <strong>Programar uma próxima visita</strong>
+              <strong>{leadMode ? "Programar próximo retorno" : "Programar uma próxima visita"}</strong>
               <small>Deixe o retorno organizado na sua agenda.</small>
             </span>
           </label>
@@ -745,7 +700,7 @@ export default function VisitForm({
             disabled={busy || photoBusy}
           >
             <Icon name="check" size={19} />
-            {busy ? "Salvando visita…" : "Registrar visita"}
+            {busy ? leadMode ? "Salvando lead…" : "Salvando visita…" : leadMode ? "Registrar lead" : "Registrar visita"}
             <Icon name="arrow" size={18} />
           </button>
         </div>
@@ -754,7 +709,7 @@ export default function VisitForm({
         <div className="summary-card">
           <div className="summary-title">
             <Icon name="visit" />
-            <h3>Sua visita, em resumo</h3>
+            <h3>{leadMode ? "Seu lead, em resumo" : "Sua visita, em resumo"}</h3>
           </div>
           <div className="summary-work">
             <span className="eyebrow">OBRA</span>
@@ -798,7 +753,7 @@ export default function VisitForm({
           <div className="summary-tip">
             <Icon name="info" size={17} />
             <p>
-              A obra será salva junto com a visita. Você poderá encontrá-la em{" "}
+              A obra será salva junto com {leadMode ? "o lead" : "a visita"}. Você poderá encontrá-la em{" "}
               <b>Obras</b>.
             </p>
           </div>
@@ -813,7 +768,7 @@ export default function VisitForm({
           </div>
           <span className="eyebrow">CONEXÕES QUE CONSTROEM</span>
           <h3>Grandes ambientes começam com uma boa conversa.</h3>
-          <p>Cada visita aproxima a FAMAC do próximo projeto.</p>
+          <p>{leadMode ? "Cada contato aproxima a FAMAC do próximo projeto." : "Cada visita aproxima a FAMAC do próximo projeto."}</p>
           <span className="brand-line" />
         </div>
         <div className="aside-help">
@@ -821,7 +776,7 @@ export default function VisitForm({
           <p>
             Empreiteiro ou arquiteto novo?
             <br />
-            <strong>Cadastre sem sair da visita.</strong>
+            <strong>Cadastre sem sair {leadMode ? "do lead" : "da visita"}.</strong>
           </p>
         </div>
       </aside>

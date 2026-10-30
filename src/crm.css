@@ -301,11 +301,16 @@
   background: #fff;
   border-radius: 10px;
   box-shadow: 0 3px 8px #14244a05;
-  cursor: grab;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  min-height: 278px;
 }
 .crm-card:active {
-  cursor: grabbing;
+  cursor: pointer;
 }
+.crm-card:hover { border-color: #b9c6dc; box-shadow: 0 9px 22px #14244a14; }
+.crm-origin { color: #617494; background: #f0f3f9; border-radius: 5px; padding: 4px 6px; font-size: 9px; font-weight: 700; }
 .crm-card-top {
   display: flex;
   align-items: center;
@@ -352,6 +357,9 @@
   color: #6b7b98;
   margin: 7px 0 0;
   overflow-wrap: anywhere;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .crm-product-chips {
   display: flex;
@@ -386,6 +394,10 @@
 }
 .crm-card-next span {
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 .crm-card-next strong {
   display: block;
@@ -400,6 +412,7 @@
   align-items: center;
   gap: 7px;
   padding-bottom: 12px;
+  margin-top: auto;
 }
 .crm-card-owner .avatar {
   width: 27px;
@@ -429,15 +442,21 @@
   justify-content: space-between;
   align-items: center;
   padding: 3px 0;
+  gap: 4px;
+  min-width: 0;
 }
 .crm-card footer .button {
   padding: 9px 0;
   font-size: 10px;
   gap: 5px;
+  min-width: 0;
+  flex: 1;
+  justify-content: flex-start;
 }
 .crm-card footer .icon-button {
   width: 28px;
   height: 28px;
+  flex: 0 0 28px;
 }
 .crm-column-empty {
   display: flex;

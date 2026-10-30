@@ -60,7 +60,8 @@ const roleName = (role) =>
     architect: "Arquiteto",
     responsible: "Responsável",
   })[role];
-export function VisitsTable({ visits, onDetail, onDelete, pageSize = 12 }) {
+export function VisitsTable({ visits, onDetail, onDelete, pageSize = 12, mode = "visit" }) {
+  const leadMode = mode === "lead";
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const filtered = visits.filter((item) =>
@@ -78,7 +79,7 @@ export function VisitsTable({ visits, onDetail, onDelete, pageSize = 12 }) {
         <div className="search-input">
           <Icon name="search" size={18} />
           <input
-            aria-label="Buscar visitas"
+            aria-label={leadMode ? "Buscar leads" : "Buscar visitas"}
             placeholder="Buscar OS, obra, bairro ou contato…"
             value={search}
             onChange={(event) => {
@@ -87,7 +88,7 @@ export function VisitsTable({ visits, onDetail, onDelete, pageSize = 12 }) {
             }}
           />
         </div>
-        <small>{filtered.length} visitas encontradas</small>
+        <small>{filtered.length} {leadMode ? "leads encontrados" : "visitas encontradas"}</small>
       </div>
       {filtered.length ? (
         <>
@@ -95,7 +96,7 @@ export function VisitsTable({ visits, onDetail, onDelete, pageSize = 12 }) {
             <table>
               <thead>
                 <tr>
-                  <th>Obra / visita</th>
+                  <th>{leadMode ? "Obra / contato" : "Obra / visita"}</th>
                   <th>Localização</th>
                   <th>Colaborador</th>
                   <th>Produtos</th>
@@ -172,7 +173,7 @@ export function VisitsTable({ visits, onDetail, onDelete, pageSize = 12 }) {
                         {onDelete && (
                           <button
                             className="icon-button delete-action"
-                            aria-label={`Excluir visita de ${item.workName} em ${dateLabel(item.date)}`}
+                            aria-label={`Excluir ${leadMode ? "lead" : "visita"} de ${item.workName} em ${dateLabel(item.date)}`}
                             onClick={() => onDelete(item)}
                           >
                             <Icon name="trash" size={17} />
@@ -189,18 +190,18 @@ export function VisitsTable({ visits, onDetail, onDelete, pageSize = 12 }) {
             totalItems={filtered.length}
             pageSize={pageSize}
             onChange={setPage}
-            itemLabel="visitas"
+            itemLabel={leadMode ? "leads" : "visitas"}
           />
         </>
       ) : (
         <Empty
           title={
-            search ? "Nenhuma visita encontrada" : "Seu histórico começa aqui"
+            search ? (leadMode ? "Nenhum lead encontrado" : "Nenhuma visita encontrada") : "Seu histórico começa aqui"
           }
           description={
             search
               ? "Tente outro nome, bairro ou contato."
-              : "As visitas registradas ficam organizadas aqui para você consultar quando precisar."
+              : `Os ${leadMode ? "leads" : "registros de visitas"} ficam organizados aqui para consulta.`
           }
           icon="visit"
         />
@@ -213,6 +214,7 @@ export function VisitDetail({ visit, onClose }) {
   return (
     <Modal title={visit.workName} onClose={onClose} wide>
       <div className="detail-top">
+        <Badge tone="blue">{visit.source === "lead" ? "Telefone · lead" : "Visita à obra"}</Badge>
         {visit.serviceNumber && <Badge tone="blue">{serviceNumber(visit.serviceNumber)}</Badge>}
         <Badge tone={visit.sold.length ? "success" : "blue"}>
           {STAGES[visit.stage]}
@@ -1478,8 +1480,10 @@ export function Reports({ data, onDetail, team = TEAM }) {
     stage: "",
     product: "",
     outcome: "",
+    source: "visit",
   };
   const [filters, setFilters] = useState(defaults);
+  const recordName = filters.source === "lead" ? "leads" : filters.source === "visit" ? "visitas" : "contatos";
   const [neighborhoodOrder, setNeighborhoodOrder] = useState("sales");
   const set = (key) => (value) =>
     setFilters((current) => ({ ...current, [key]: value }));
@@ -1513,6 +1517,7 @@ export function Reports({ data, onDetail, team = TEAM }) {
     (a, b) => b[neighborhoodOrder] - a[neighborhoodOrder],
   );
   const fullFilters = [
+    `Origem: ${filters.source === "lead" ? "Telefone" : filters.source === "visit" ? "Visita à obra" : "Todas"}`,
     filters.userId && `Colaborador: ${person(filters.userId)}`,
     filters.architectId &&
       `Arquiteto: ${data.contacts.find((item) => item.id === filters.architectId)?.name}`,
@@ -1533,7 +1538,7 @@ export function Reports({ data, onDetail, team = TEAM }) {
           alt="FAMAC Acabamentos"
         />
         <div>
-          <h1>Relatório de visitação</h1>
+          <h1>Relatório de contatos e visitação</h1>
           <p>
             {dateLabel(filters.start)} a {dateLabel(filters.end)} · Gerado em{" "}
             {dateLabel(today())}
@@ -1559,7 +1564,7 @@ export function Reports({ data, onDetail, team = TEAM }) {
             onClick={() =>
               downloadFile(
                 visitsCsv(visits),
-                `famac-visitas-${filters.start || "inicio"}-${filters.end || today()}.csv`,
+                `famac-${recordName}-${filters.start || "inicio"}-${filters.end || today()}.csv`,
                 "text/csv;charset=utf-8",
               )
             }
@@ -1584,7 +1589,7 @@ export function Reports({ data, onDetail, team = TEAM }) {
               <Icon name="search" size={18} />
               Encontre a visão que você precisa
             </h2>
-            <p>Combine os filtros para analisar suas visitas.</p>
+            <p>Combine os filtros para analisar visitas e leads.</p>
           </div>
           <button
             className="button text-button"
@@ -1594,6 +1599,11 @@ export function Reports({ data, onDetail, team = TEAM }) {
           </button>
         </div>
         <div className="fields report-filter-grid">
+          <Select label="Origem" value={filters.source} onChange={set("source")}>
+            <option value="visit">Visitas em obras</option>
+            <option value="lead">Leads por telefone</option>
+            <option value="">Todas as origens</option>
+          </Select>
           <Field
             label="De"
             type="date"
@@ -1705,7 +1715,7 @@ export function Reports({ data, onDetail, team = TEAM }) {
       <div className="report-period">
         <span>
           <i className="dot offered" />
-          {visits.length} visitas no período selecionado
+          {visits.length} {recordName} no período selecionado
         </span>
         <small>
           {filters.start ? dateLabel(filters.start) : "Desde o início"} —{" "}
@@ -1714,25 +1724,25 @@ export function Reports({ data, onDetail, team = TEAM }) {
       </div>
       <div className="metrics">
         <Metric
-          label="Visitas realizadas"
+          label={filters.source === "lead" ? "Leads recebidos" : filters.source === "visit" ? "Visitas realizadas" : "Contatos registrados"}
           value={stats.visits}
           detail={`${stats.works} obras diferentes`}
           icon="visit"
         />
         <Metric
-          label="Visitas de prospecção"
+          label={filters.source === "lead" ? "Leads de prospecção" : "Visitas de prospecção"}
           value={stats.prospecting}
-          detail="Visitas classificadas como prospecção"
+          detail={`${recordName} classificados como prospecção`}
           icon="search"
         />
         <Metric
-          label="Visitas com venda"
+          label={`${recordName[0].toUpperCase()}${recordName.slice(1)} com venda`}
           value={stats.sales}
-          detail={`${stats.conversion}% das visitas filtradas`}
+          detail={`${stats.conversion}% dos contatos filtrados`}
           icon="trend"
         />
         <Metric
-          label="Valor das visitas filtradas"
+          label="Valor dos contatos filtrados"
           value={money(stats.value)}
           detail="Total da visita, incluindo todos os produtos"
           icon="chart"
@@ -1747,7 +1757,7 @@ export function Reports({ data, onDetail, team = TEAM }) {
             <div>
               <span className="eyebrow">PORTFÓLIO EM MOVIMENTO</span>
               <h2>Interesse e vendas por produto</h2>
-              <p>Cada contagem representa uma visita com o produto.</p>
+              <p>Cada contagem representa um contato com o produto.</p>
             </div>
             <Icon name="box" />
           </div>
@@ -1858,20 +1868,20 @@ export function Reports({ data, onDetail, team = TEAM }) {
       <section className="panel team-report">
         <div className="panel-heading">
           <div>
-            <h2>Presença de cada colaborador</h2>
-            <p>Visitas, dias em campo e resultados no período filtrado.</p>
+            <h2>{filters.source === "lead" ? "Atendimentos por colaborador" : "Presença de cada colaborador"}</h2>
+            <p>{filters.source === "lead" ? "Leads recebidos e resultados no período filtrado." : "Visitas, dias em campo e resultados no período filtrado."}</p>
           </div>
           <Icon name="users" />
         </div>
-        <TeamKpis rows={indicators} onChoose={set("userId")} />
+        <TeamKpis rows={indicators} onChoose={set("userId")} source={filters.source} />
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
                 <th>Colaborador</th>
-                <th>Visitas</th>
+                <th>{filters.source === "lead" ? "Leads" : "Visitas"}</th>
                 <th>Prospecções</th>
-                <th>Visitas com venda</th>
+                <th>{filters.source === "lead" ? "Leads com venda" : "Visitas com venda"}</th>
                 <th>Conversão</th>
                 <th>Valor total</th>
               </tr>
@@ -1904,13 +1914,13 @@ export function Reports({ data, onDetail, team = TEAM }) {
       <section className="panel report-visits">
         <div className="panel-heading">
           <div>
-            <h2>Visitas que compõem este relatório</h2>
+            <h2>{filters.source === "lead" ? "Leads que compõem este relatório" : filters.source === "visit" ? "Visitas que compõem este relatório" : "Contatos que compõem este relatório"}</h2>
             <p>Consulte os detalhes de cada contato e de cada obra.</p>
           </div>
           <Badge>{visits.length} registros</Badge>
         </div>
         <div className="screen-only">
-          <VisitsTable visits={visits} onDetail={onDetail} />
+          <VisitsTable visits={visits} onDetail={onDetail} mode={filters.source} />
         </div>
         <table className="print-visits">
           <thead>

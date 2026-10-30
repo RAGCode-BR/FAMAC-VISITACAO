@@ -179,6 +179,7 @@ export function installCrmRoutes(app, pool, readState) {
       id,
       userId: ownerId,
       date: payload.date,
+      source: payload.source === "lead" ? "lead" : "visit",
       stage: payload.stage,
       offered: Array.isArray(payload.offered) ? payload.offered : [],
       sold: Array.isArray(payload.sold) ? payload.sold : [],

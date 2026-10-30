@@ -26,6 +26,19 @@ import {
 } from "../src/lib/crm.mjs";
 import { sellerAssignments } from "../src/lib/seller-notifications.mjs";
 
+test("lead e visita na mesma obra conservam origem e uma oportunidade", () => {
+  const work = { id: crypto.randomUUID(), name: "Obra Alfa", street: "Rua A", number: "10", neighborhood: "Centro", city: "Sorriso", state: "MT" };
+  const actor = { role: "collaborator", teamId: "recepcao", name: "Recepção" };
+  const base = { ...newVisit("recepcao"), id: crypto.randomUUID(), workId: work.id, workName: work.name, offered: ["FORRO"], sellerId: "charles" };
+  const first = recordCrmVisit(emptyCrm(), { ...base, source: "lead" }, work, actor).crm;
+  const second = recordCrmVisit(first, { ...base, id: crypto.randomUUID(), userId: "celso", source: "visit", sellerId: "" }, work, { role: "collaborator", teamId: "celso", name: "Celso" }).crm;
+  assert.equal(second.opportunities.length, 1);
+  assert.equal(second.opportunities[0].source, "lead");
+  assert.deepEqual(second.opportunities[0].sources, ["lead", "visit"]);
+  assert.deepEqual(second.visitLinks.map((item) => item.source), ["lead", "visit"]);
+  assert.equal(second.opportunities[0].responsibleId, "charles");
+});
+
 test("vendedor atribuído recebe um aviso por atribuição, sem transferir a prospecção", () => {
   const work = { id: crypto.randomUUID(), name: "Obra exemplo", street: "Rua A",
     number: "10", neighborhood: "Centro", city: "Sorriso", state: "MT" };

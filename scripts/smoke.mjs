@@ -58,13 +58,13 @@ try {
   await page
     .getByRole("heading", { name: "Cada visita, uma oportunidade." })
     .waitFor();
-  await page.locator(".visit-form").waitFor();
+  await page.locator(".visit-form:visible").waitFor();
   await page.evaluate(() => document.fonts.ready);
   assert.equal(
     await page.getByLabel("Colaborador na prévia").inputValue(),
     "claudionor",
   );
-  assert.equal(await page.locator(".product-option").count(), 14);
+  assert.equal(await page.locator(".product-option:visible").count(), 14);
   await assertFits();
   await page.screenshot({
     path: "docs/preview-desktop.png",
@@ -303,7 +303,7 @@ try {
   );
 
   await page.reload();
-  await page.locator(".visit-form").waitFor();
+  await page.locator(".visit-form:visible").waitFor();
   await navigate("Contatos");
   const architectCard = page
     .locator(".contact-card")

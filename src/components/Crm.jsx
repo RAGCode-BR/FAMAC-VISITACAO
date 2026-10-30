@@ -10,6 +10,8 @@ import {
 } from "../lib/crm.mjs";
 import {
   TEAM,
+  contactOrigin,
+  originLabel,
   addressLabel,
   csvCell,
   dateLabel,
@@ -46,6 +48,7 @@ export default function Crm({
   const activeStageIds = crmActiveStageIds(crm);
   const [query, setQuery] = useState("");
   const [responsible, setResponsible] = useState("");
+  const [origin, setOrigin] = useState("");
   const [returns, setReturns] = useState("");
   const [mobileStage, setMobileStage] = useState("prospecting");
   const [dialog, setDialog] = useState(null);
@@ -63,16 +66,18 @@ export default function Crm({
   const [drop, setDrop] = useState("");
   const [moveError, setMoveError] = useState("");
   const moving = useRef(false);
+  const draggingCard = useRef(false);
   const [view, setView] = useState("board");
   const [closedStage, setClosedStage] = useState("");
   const [page, setPage] = useState(1);
-  useEffect(() => setPage(1), [query, responsible, closedStage, view]);
+  useEffect(() => setPage(1), [query, responsible, origin, closedStage, view]);
   useEffect(() => {
     if (!stageOrder.includes(mobileStage)) setMobileStage(stageOrder[0]);
   }, [stageOrder.join("|"), mobileStage]);
   const filtered = crm.opportunities.filter(
     (item) =>
       !item.deleted &&
+      (!origin || (origin === "manual" ? item.source === "manual" : (item.sources?.length ? item.sources : [item.source || "visit"]).includes(origin))) &&
       (!responsible || item.responsibleId === responsible) &&
       (!returns ||
         (returns === "overdue"
@@ -246,6 +251,12 @@ export default function Crm({
               </option>
             ))}
           </Select>
+          <Select label="Origem da oportunidade" value={origin} onChange={setOrigin}>
+            <option value="">Todas as origens</option>
+            <option value="visit">Visita à obra</option>
+            <option value="lead">Telefone</option>
+            <option value="manual">Obra cadastrada</option>
+          </Select>
           {view === "closed" ? (
             <Select
               label="Resultado da negociação"
@@ -382,15 +393,21 @@ export default function Crm({
                             className="crm-card"
                             key={item.id}
                             draggable
-                            onDragStart={(event) =>
+                            onClick={(event) => {
+                              if (draggingCard.current || event.target.closest("button")) return;
+                              open(item, active(item) ? "update" : "details");
+                            }}
+                            onDragStart={(event) => {
+                              draggingCard.current = true;
                               event.dataTransfer.setData(
                                 "application/x-famac-crm",
                                 JSON.stringify({
                                   id: item.id,
                                   version: item.version,
                                 }),
-                              )
-                            }
+                              );
+                            }}
+                            onDragEnd={() => setTimeout(() => { draggingCard.current = false; }, 150)}
                           >
                             <div className="crm-card-top">
                               <Badge
@@ -400,6 +417,7 @@ export default function Crm({
                               >
                                 {item.work.type}
                               </Badge>
+                              <span className="crm-origin">{item.sources?.includes("lead") && item.sources?.includes("visit") ? "Telefone + visita" : originLabel(item.source)}</span>
                               {item.completedProducts.length > 0 &&
                                 active(item) && (
                                   <span className="crm-partial">
@@ -484,7 +502,7 @@ export default function Crm({
                                       !link.deleted,
                                   ).length
                                 }{" "}
-                                visitas
+                                contatos
                               </small>
                             </div>
                             <footer>
@@ -559,6 +577,7 @@ export default function Crm({
                       <Badge tone={item.stage === "won" ? "success" : ""}>
                         {labels[item.stage]}
                       </Badge>
+                      <span className="crm-origin">{item.sources?.includes("lead") && item.sources?.includes("visit") ? "Telefone + visita" : originLabel(item.source)}</span>
                       <button
                         className="crm-card-title"
                         onClick={() => open(item, "details")}
@@ -952,6 +971,7 @@ function CrmDialog({
       <div className="crm-detail-summary">
         <div>
           <Badge tone="blue">{labels[item.stage]}</Badge>
+          <Badge>{item.sources?.includes("lead") && item.sources?.includes("visit") ? "Telefone + visita" : originLabel(item.source)}</Badge>
           <p>{addressLabel(item.work)}</p>
           {item.work.responsible && (
             <p>
@@ -1329,7 +1349,7 @@ function ProspectingContext({ opportunity, account }) {
         <article className="crm-prospecting-visit" key={visit.id}>
           <div className="crm-prospecting-visit-heading">
             <strong>{dateLabel(visit.date)}</strong>
-            <span>Visita de {person(visit.userId)}</span>
+            <span>{contactOrigin(visit) === "lead" ? "Contato por telefone" : "Visita"} de {person(visit.userId)}</span>
           </div>
           {!!visit.offered?.length && <div className="crm-prospecting-products">
             {visit.offered.map((product) => <Badge key={product} tone={visit.sold?.includes(product) ? "success" : "blue"}>
@@ -1340,7 +1360,7 @@ function ProspectingContext({ opportunity, account }) {
           {!!visit.photos?.length && <div className="detail-photos crm-prospecting-photos">
             {visit.photos.map((photo) => <VisitPhoto key={photo.id} photo={photo} alt={`Foto da obra: ${photo.name}`} />)}
           </div>}
-          {!visit.notes && !visit.photos?.length && <small>Sem fotos ou anotações nesta visita.</small>}
+          {!visit.notes && !visit.photos?.length && <small>Sem fotos ou anotações neste contato.</small>}
         </article>)}</div>}
   </section>;
 }
@@ -1348,7 +1368,7 @@ function eventLabel(event, labels = CRM_STAGES) {
   return (
     {
       created: "Oportunidade aberta",
-      visit: "Visita registrada",
+      visit: event.source === "lead" ? "Lead por telefone registrado" : "Visita registrada",
       visit_deleted: "Visita excluída",
       deleted: "Cartão ocultado",
       restored: "Cartão restaurado",
@@ -1397,7 +1417,7 @@ export function CrmSalesReport({ data, filters, team }) {
         person(sale.prospectorId),
         sale.products.join(", "),
         sale.value.toFixed(2).replace(".", ","),
-        sale.sourceVisitId ? "Visita vinculada" : "CRM",
+        `${originLabel(sale.source)} · ${sale.sourceVisitId ? "Registro vinculado" : "CRM"}`,
       ]),
     ];
     const url = URL.createObjectURL(
@@ -1416,7 +1436,7 @@ export function CrmSalesReport({ data, filters, team }) {
     <section className="panel crm-sales-report">
       <div className="panel-heading">
         <div>
-          <h2>Fechamentos de vendas · CRM e visitas</h2>
+          <h2>Fechamentos de vendas · CRM, visitas e leads</h2>
           <p>
             Cada venda aparece uma única vez. Os filtros acima se aplicam à data
             da venda e ao vendedor.
@@ -1452,6 +1472,7 @@ export function CrmSalesReport({ data, filters, team }) {
             <thead>
               <tr>
                 <th>Data / obra</th>
+                <th>Origem</th>
                 <th>Produtos / bairro</th>
                 <th>Quem vendeu</th>
                 <th>Quem prospectou</th>
@@ -1472,6 +1493,7 @@ export function CrmSalesReport({ data, filters, team }) {
                     <strong>{sale.work.name}</strong>
                     <small>{dateLabel(sale.date)}</small>
                   </td>
+                  <td>{originLabel(sale.source)}</td>
                   <td>
                     {sale.products.join(", ")}
                     <small>

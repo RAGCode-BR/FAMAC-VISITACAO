@@ -118,7 +118,7 @@ export const repository = cloudEnabled
           .filter((visit) => activeVisitIds.has(visit.id) && !visit.deleted)
           .sort((a, b) => b.date.localeCompare(a.date))
           .map((visit) => ({
-            id: visit.id, userId: visit.userId, date: visit.date,
+            id: visit.id, userId: visit.userId, date: visit.date, source: visit.source || "visit",
             stage: visit.stage, offered: visit.offered, sold: visit.sold,
             notes: visit.notes || "", photos: visit.photos || [],
           }));

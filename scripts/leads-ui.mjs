@@ -1,0 +1,54 @@
+import assert from "node:assert/strict";
+import { chromium } from "playwright";
+
+const browser = await chromium.launch({ executablePath: process.env.BROWSER_PATH || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
+const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "pt-BR" });
+const page = await context.newPage();
+const errors = [];
+page.on("pageerror", (error) => errors.push(error.message));
+const nav = (name) => page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name, exact: true }).click();
+try {
+  await page.goto(process.env.TEST_APP_URL || "http://127.0.0.1:5174/");
+  const closedWidth = await page.locator(".sidebar").evaluate((node) => node.getBoundingClientRect().width);
+  assert.ok(closedWidth < 100, `menu recolhido: ${closedWidth}`);
+  await page.locator(".sidebar").hover();
+  await page.waitForTimeout(250);
+  const openWidth = await page.locator(".sidebar").evaluate((node) => node.getBoundingClientRect().width);
+  assert.ok(openWidth > 200, `menu expandido: ${openWidth}`);
+  await nav("Novo lead");
+  const form = page.locator(".visit-form:visible");
+  await form.getByLabel("Data do contato").waitFor();
+  assert.equal(await form.getByLabel("Acompanhar esta obra no CRM").count(), 0);
+  assert.equal(await form.getByLabel("Oportunidade da equipe").count(), 0);
+  await form.getByLabel("Nome / identificação da obra").fill("Lead de teste");
+  await form.getByLabel("Rua / avenida").fill("Rua Alfa");
+  await form.getByLabel("Número").fill("123");
+  await form.getByLabel("Bairro").fill("Centro");
+  await form.getByLabel("Cidade").fill("Sorriso");
+  await form.getByLabel("UF").fill("MT");
+  await form.getByLabel("Oferecer FORRO").check();
+  await form.getByRole("button", { name: "Registrar lead" }).click();
+  await page.getByText("1 leads encontrados").waitFor();
+  await nav("CRM");
+  const card = page.locator(".crm-card", { hasText: "Lead de teste" });
+  await card.waitFor();
+  await card.getByText("Telefone").waitFor();
+  await card.locator(".crm-card-address").click();
+  await page.getByRole("dialog").getByText("Lead de teste").waitFor();
+  await page.getByRole("button", { name: "Fechar janela" }).click();
+  await nav("Relatórios");
+  await page.getByLabel("Origem").selectOption("lead");
+  await page.getByText("1 leads no período selecionado").waitFor();
+  await page.getByLabel("Origem").selectOption("visit");
+  await page.getByText("0 visitas no período selecionado").waitFor();
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.getByRole("button", { name: "Abrir navegação" }).click();
+  await nav("Novo lead");
+  await page.locator(".visit-form:visible").getByLabel("Data do contato").waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  assert.deepEqual(errors, []);
+  console.log("PASS: lead salvo, CRM por telefone, card clicável, relatórios separados e menu desktop recolhível");
+} finally {
+  await context.close();
+  await browser.close();
+}

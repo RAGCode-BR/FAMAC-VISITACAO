@@ -13,6 +13,7 @@
     "db:migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "neon:client-env": "node scripts/neon-client-env.mjs",
     "test:ui": "node scripts/smoke.mjs",
+    "test:leads": "node scripts/leads-ui.mjs",
     "test:features": "node scripts/features-ui.mjs",
     "test:product-photos": "node scripts/product-photos-ui.mjs",
     "test:crm": "node scripts/crm-ui.mjs",

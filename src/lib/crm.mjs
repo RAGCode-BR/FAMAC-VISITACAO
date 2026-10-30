@@ -1,5 +1,6 @@
 import {
   TEAM,
+  contactOrigin,
   normalize,
   productNames,
   person,
@@ -113,6 +114,7 @@ export function createCrmOpportunity(current, work, actor, { stage, at = new Dat
   }
   const item = {
     id: uid(), primaryWorkId: work.id, workKey, work: crmWorkSnapshot(work),
+    source: "manual", sources: [],
     stage, responsibleId: actor.teamId,
     prospectorId: actor.teamId, products: [], pendingProducts: [],
     completedProducts: [], discardedProducts: [], cycle: 1,
@@ -312,6 +314,7 @@ function addSale(
     sourceVisitId,
     sellerTeamId: input.sellerTeamId,
     prospectorId: opportunity.prospectorId,
+    source: opportunity.source || "visit",
     date: input.date,
     products: [...input.products],
     value: Math.round(value * 100) / 100,
@@ -366,6 +369,7 @@ export function recordCrmVisit(
   { at = new Date().toISOString(), historical = false } = {},
 ) {
   const crm = structuredClone(current || emptyCrm());
+  const source = contactOrigin(visit);
   const linked = crm.visitLinks.find((item) => item.visitId === visit.id);
   if (linked) return { crm, opportunityId: linked.opportunityId };
   const enabled =
@@ -406,6 +410,8 @@ export function recordCrmVisit(
       stage: firstActiveStage(crm),
       responsibleId: visit.sellerId || visit.userId,
       prospectorId: visit.userId,
+      source,
+      sources: [source],
       products: [],
       pendingProducts: [],
       completedProducts: [],
@@ -428,26 +434,32 @@ export function recordCrmVisit(
         sourceVisitId: visit.id,
         note: historical
           ? "Oportunidade criada a partir do histórico de visitas."
-          : "Oportunidade aberta nesta visita.",
+          : source === "lead" ? "Oportunidade aberta em contato telefônico." : "Oportunidade aberta nesta visita.",
+        source,
       },
       at,
     );
   }
+  if (opportunity.source === "manual") opportunity.source = source;
+  opportunity.sources = [...new Set([...(opportunity.sources || [opportunity.source || "visit"]), source])];
   if (!historical && visit.sellerId && opportunity.responsibleId !== visit.sellerId) {
-    ensure(["admin", "supervisor"].includes(actor.role),
-      "Somente Túlio e a administração podem alterar o vendedor de uma oportunidade existente.", 403);
-    ensure(team(visit.sellerId), "Selecione um vendedor válido.");
-    const previousResponsibleId = opportunity.responsibleId;
-    opportunity.responsibleId = visit.sellerId;
-    activity(crm, opportunity, actor, "updated", {
-      from: opportunity.stage,
-      to: opportunity.stage,
-      previousResponsibleId,
-      responsibleId: visit.sellerId,
-      nextAction: opportunity.nextAction,
-      nextDate: opportunity.nextDate,
-      note: "Vendedor responsável definido nesta visita.",
-    }, at);
+    const mayReassign = ["admin", "supervisor"].includes(actor.role);
+    if (!mayReassign && requestedId)
+      ensure(false, "Somente Túlio e a administração podem alterar o vendedor de uma oportunidade existente.", 403);
+    if (mayReassign) {
+      ensure(team(visit.sellerId), "Selecione um vendedor válido.");
+      const previousResponsibleId = opportunity.responsibleId;
+      opportunity.responsibleId = visit.sellerId;
+      activity(crm, opportunity, actor, "updated", {
+        from: opportunity.stage,
+        to: opportunity.stage,
+        previousResponsibleId,
+        responsibleId: visit.sellerId,
+        nextAction: opportunity.nextAction,
+        nextDate: opportunity.nextDate,
+        note: "Vendedor responsável definido nesta visita.",
+      }, at);
+    }
   }
   if (!historical && visit.sold.length && !visit.crmSaleId) {
     ensure(
@@ -477,7 +489,7 @@ export function recordCrmVisit(
       opportunity,
       actor,
       "reopened",
-      { note: "Nova prospecção registrada em uma visita." },
+      { note: source === "lead" ? "Novo contato telefônico registrado." : "Nova prospecção registrada em uma visita.", source },
       at,
     );
   }
@@ -561,6 +573,7 @@ export function recordCrmVisit(
     visitId: visit.id,
     opportunityId: opportunity.id,
     userId: visit.userId,
+    source,
     date: visit.date,
   });
   activity(
@@ -573,6 +586,7 @@ export function recordCrmVisit(
       date: visit.date,
       products: visit.offered,
       visitType: visit.stage,
+      source,
       linkedSaleId: visit.crmSaleId || null,
     },
     at,
@@ -837,6 +851,7 @@ export function businessSales(data) {
         sourceVisitId: visit.id,
         sellerTeamId: visit.userId,
         prospectorId: visit.userId,
+        source: contactOrigin(visit),
         date: visit.date,
         products: visit.sold,
         value: visit.saleValue,
@@ -848,6 +863,7 @@ export function businessSales(data) {
 export function filterBusinessSales(sales, filters) {
   return sales.filter(
     (sale) =>
+      (!filters.source || (sale.source || "visit") === filters.source) &&
       filterVisits(
         [
           {
@@ -857,9 +873,10 @@ export function filterBusinessSales(sales, filters) {
             offered: sale.products,
             sold: sale.products,
             stage: "closing",
+            source: sale.source || "visit",
           },
         ],
-        filters,
+        { ...filters, source: "" },
       ).length,
   );
 }

@@ -64,7 +64,7 @@ try {
   await page
     .getByRole("heading", { name: "Cada visita, uma oportunidade." })
     .waitFor();
-  await page.locator(".sidebar-brand img").evaluate((image) => image.decode());
+  await page.locator(".sidebar-logo-frame img").evaluate((image) => image.decode());
   assert.equal(await page.locator(".product-option").count(), 14);
   const favicon = await page.locator('link[rel="icon"]').getAttribute("href");
   assert.equal(

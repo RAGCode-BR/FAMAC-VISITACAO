@@ -9,7 +9,7 @@ import {
   requireCatalogChange,
 } from "../server/policy.mjs";
 import { pinIdentity } from "../src/lib/identity.mjs";
-import { DEFAULT_PRODUCTS, emptyData } from "../src/lib/domain.mjs";
+import { DEFAULT_PRODUCTS, emptyData, newVisit } from "../src/lib/domain.mjs";
 
 test("PIN de um dígito preserva as contas existentes e aceita o zero", () => {
   assert.equal(pinIdentity("0"), "pin-900001@login.famac.invalid");
@@ -40,6 +40,13 @@ test("somente a administração pode operar em nome de outro colaborador", () =>
   assert.doesNotThrow(() => requireOwner({ role: "admin" }, "celso"));
   assert.doesNotThrow(() => requireOwner({ role: "supervisor", teamId: "tulio" }, "celso"));
   assert.throws(() => requireOwner({ role: "admin" }, "qualquer-pessoa"));
+});
+test("novo atendimento exige origem válida e CRM ativo", () => {
+  const valid = { ...newVisit("claudionor"), workId: crypto.randomUUID(), workName: "Obra", street: "Rua A", neighborhood: "Centro", city: "Sorriso", state: "MT", offered: ["FORRO"] };
+  assert.doesNotThrow(() => validateRecord("visits", { ...valid, source: "lead" }));
+  assert.throws(() => validateRecord("visits", { ...valid, source: "email" }));
+  assert.throws(() => validateRecord("visits", { ...valid, crmEnabled: false }));
+  assert.throws(() => validateRecord("visits", { ...valid, crmEnabled: undefined }));
 });
 test("o servidor recusa identificadores repetidos ou inválidos", () => {
   const state = { version: 1, contacts: [], works: [], visits: [], plans: [] };

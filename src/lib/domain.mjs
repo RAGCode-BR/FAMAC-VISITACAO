@@ -27,6 +27,8 @@ export const STAGES = {
   relationship: "Relacionamento",
   closing: "Fechamento",
 };
+export const contactOrigin = (record) => record?.source === "lead" ? "lead" : "visit";
+export const originLabel = (source) => source === "lead" ? "Telefone" : source === "manual" ? "Obra cadastrada" : "Visita à obra";
 export const emptyData = () => ({
   version: 1,
   products: [],
@@ -131,6 +133,7 @@ export const newVisit = (userId) => ({
   workName: "",
   date: today(),
   userId,
+  source: "visit",
   responsible: "",
   phone: "",
   contractorId: "",
@@ -151,8 +154,11 @@ export const newVisit = (userId) => ({
   crmSaleId: "",
   sellerId: "",
 });
+export const newLead = (userId) => ({ ...newVisit(userId), source: "lead" });
 
 export function validateVisit(visit, allowedProducts = PRODUCTS) {
+  if (visit.source !== undefined && !["visit", "lead"].includes(visit.source))
+    throw new Error("Origem do registro inválida.");
   if (!visit.date || visit.date > today())
     throw new Error(
       "Informe uma data de visita até hoje. Para datas futuras, use a programação.",
@@ -258,6 +264,7 @@ export function recordVisit(
   };
   const visit = {
     ...draft,
+    source: contactOrigin(draft),
     id: visitId,
     workId: work.id,
     workName: work.name,
@@ -304,6 +311,7 @@ export function recordVisit(
 export function filterVisits(visits, filters) {
   return visits.filter(
     (visit) =>
+      (!filters.source || contactOrigin(visit) === filters.source) &&
       (!filters.start || visit.date >= filters.start) &&
       (!filters.end || visit.date <= filters.end) &&
       (!filters.userId || visit.userId === filters.userId) &&
@@ -393,6 +401,7 @@ export function csvCell(value) {
 export function visitsCsv(visits) {
   const columns = [
     "Data",
+    "Origem",
     "Colaborador",
     "Obra",
     "Responsável",
@@ -417,6 +426,7 @@ export function visitsCsv(visits) {
   ];
   const rows = visits.map((item) => [
     dateLabel(item.date),
+    originLabel(contactOrigin(item)),
     person(item.userId),
     item.workName,
     item.responsible,

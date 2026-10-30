@@ -37,14 +37,14 @@ export function KpiRing({ value, label, muted = false }) {
   );
 }
 
-function ActivityChart({ bins }) {
+function ActivityChart({ bins, term = "visitas" }) {
   const id = useId().replaceAll(":", "");
   const [active, setActive] = useState(null);
   if (!bins.length)
     return (
       <Empty
         title="O próximo movimento começa em campo"
-        description="Registre visitas para acompanhar a evolução do período."
+        description={`Registre ${term} para acompanhar a evolução do período.`}
         icon="trend"
       />
     );
@@ -72,18 +72,18 @@ function ActivityChart({ bins }) {
       <div className="activity-chart-legend">
         <span>
           <i />
-          Visitas realizadas
+          {term === "leads" ? "Leads recebidos" : term === "contatos" ? "Contatos registrados" : "Visitas realizadas"}
         </span>
         <span>
           <i />
-          Visitas com venda
+          {term === "leads" ? "Leads com venda" : term === "contatos" ? "Contatos com venda" : "Visitas com venda"}
         </span>
       </div>
       <div className="activity-plot">
         <svg
           viewBox={`0 0 ${width} ${height}`}
           role="img"
-          aria-label="Evolução das visitas realizadas e das visitas com venda por intervalo de datas"
+          aria-label={`Evolução dos ${term} e dos registros com venda por intervalo de datas`}
         >
           <defs>
             <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
@@ -152,7 +152,7 @@ function ActivityChart({ bins }) {
                 fill="transparent"
                 tabIndex="0"
                 role="button"
-                aria-label={`${dateLabel(bin.date)} a ${dateLabel(bin.endDate)}: ${bin.visits} visitas, ${bin.sales} com venda`}
+                aria-label={`${dateLabel(bin.date)} a ${dateLabel(bin.endDate)}: ${bin.visits} ${term}, ${bin.sales} com venda`}
                 onPointerEnter={() => setActive(index)}
                 onPointerLeave={() => setActive(null)}
                 onFocus={() => setActive(index)}
@@ -165,7 +165,7 @@ function ActivityChart({ bins }) {
                   }
                 }}
               >
-                <title>{`${dateLabel(bin.date)} a ${dateLabel(bin.endDate)}: ${bin.visits} visitas, ${bin.sales} com venda`}</title>
+                <title>{`${dateLabel(bin.date)} a ${dateLabel(bin.endDate)}: ${bin.visits} ${term}, ${bin.sales} com venda`}</title>
               </rect>
             </g>
           ))}
@@ -180,7 +180,7 @@ function ActivityChart({ bins }) {
                 ` a ${dateLabel(selection.endDate)}`}
             </strong>
             <span>
-              {selection.visits} visitas · {selection.sales} com venda
+              {selection.visits} {term} · {selection.sales} com venda
             </span>
           </>
         ) : (
@@ -196,22 +196,23 @@ function ActivityChart({ bins }) {
 
 export function ReportOverview({ visits, stats, filters }) {
   const series = activitySeries(visits, filters.start, filters.end);
+  const term = filters.source === "lead" ? "leads" : filters.source === "visit" ? "visitas" : "contatos";
   return (
     <div className="report-insights">
       <section className="panel report-evolution">
         <div className="panel-heading">
           <div>
             <span className="eyebrow">RITMO DA OPERAÇÃO</span>
-            <h2>Evolução das visitas</h2>
+            <h2>Evolução {term === "visitas" ? "das visitas" : `dos ${term}`}</h2>
             <p>Como a atividade e os fechamentos se distribuem no período.</p>
           </div>
           <Icon name="trend" />
         </div>
-        <ActivityChart bins={series} />
+        <ActivityChart bins={series} term={term} />
       </section>
       <section className="conversion-panel">
         <span className="eyebrow">EFICIÊNCIA COMERCIAL</span>
-        <h2>Da visita à venda.</h2>
+        <h2>{term === "visitas" ? "Da visita à venda." : term === "leads" ? "Do lead à venda." : "Do contato à venda."}</h2>
         <KpiRing
           value={stats.conversion}
           label="conversão"
@@ -228,14 +229,14 @@ export function ReportOverview({ visits, stats, filters }) {
           </div>
         </div>
         <div className="average-ticket">
-          <span>Valor médio por visita com venda</span>
+          <span>Valor médio por {term === "visitas" ? "visita" : term === "leads" ? "lead" : "contato"} com venda</span>
           <strong>
             {stats.sales ? money(stats.value / stats.sales) : "—"}
           </strong>
         </div>
         <p>
           {stats.visits
-            ? "Visitas com venda ÷ visitas do período."
+            ? `${term[0].toUpperCase()}${term.slice(1)} com venda ÷ ${term} do período.`
             : "Os indicadores aparecem com os primeiros registros."}
         </p>
       </section>
@@ -243,7 +244,8 @@ export function ReportOverview({ visits, stats, filters }) {
   );
 }
 
-export function TeamKpis({ rows, onChoose }) {
+export function TeamKpis({ rows, onChoose, source = "visit" }) {
+  const term = source === "lead" ? "leads" : source === "visit" ? "visitas" : "contatos";
   return (
     <div className="team-kpis">
       {rows.map((row) => (
@@ -261,7 +263,7 @@ export function TeamKpis({ rows, onChoose }) {
           <div className="team-kpi-main">
             <div>
               <strong>{row.visits}</strong>
-              <span>visitas realizadas</span>
+              <span>{term === "visitas" ? "visitas realizadas" : term === "leads" ? "leads recebidos" : "contatos registrados"}</span>
             </div>
             <KpiRing
               value={row.conversion}
@@ -271,7 +273,7 @@ export function TeamKpis({ rows, onChoose }) {
           </div>
           <div className="team-share">
             <span>
-              Participação nas visitas <b>{percent(row.share)}%</b>
+              Participação {term === "visitas" ? "nas" : "nos"} {term} <b>{percent(row.share)}%</b>
             </span>
             <div>
               <i style={{ width: `${row.share}%` }} />
@@ -279,7 +281,7 @@ export function TeamKpis({ rows, onChoose }) {
           </div>
           <dl>
             <div>
-              <dt>Dias com visita</dt>
+              <dt>Dias com {source === "lead" ? "contato" : source === "visit" ? "visita" : "registro"}</dt>
               <dd>{row.days}</dd>
             </div>
             <div>

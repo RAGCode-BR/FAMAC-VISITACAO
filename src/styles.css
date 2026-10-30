@@ -3909,6 +3909,27 @@ td > small {
     animation: none !important;
   }
 }
+@media (min-width: 761px) {
+  .sidebar { width: 68px; overflow-x: hidden; transition: width .2s ease; box-shadow: 4px 0 18px #111a3830; }
+  .sidebar:hover, .sidebar:focus-within { width: 235px; }
+  .workspace { margin-left: 68px; }
+  .sidebar-brand { min-height: 88px; padding: 16px 8px; }
+  .sidebar-mini-logo { display: block !important; width: 38px !important; height: 50px !important; object-fit: contain; margin: 0 auto; }
+  .sidebar:hover .sidebar-mini-logo, .sidebar:focus-within .sidebar-mini-logo { display: none !important; }
+  .sidebar:not(:hover):not(:focus-within) .sidebar-logo-frame,
+  .sidebar:not(:hover):not(:focus-within) .brand-tagline,
+  .sidebar:not(:hover):not(:focus-within) .brand-system,
+  .sidebar:not(:hover):not(:focus-within) .nav-group-label,
+  .sidebar:not(:hover):not(:focus-within) .sidebar-bottom,
+  .sidebar:not(:hover):not(:focus-within) nav button span,
+  .sidebar:not(:hover):not(:focus-within) nav button small { display: none; }
+  .sidebar:not(:hover):not(:focus-within) nav { padding: 0 9px; }
+  .sidebar:not(:hover):not(:focus-within) nav button { width: 50px; justify-content: center; padding: 12px 0; }
+  .sidebar:not(:hover):not(:focus-within) nav button svg { flex: 0 0 auto; }
+  .sidebar:not(:hover):not(:focus-within) nav button.active::before { left: -9px; }
+}
+.sidebar-mini-logo { display: none; }
+
 @media print {
   @page {
     size: A4 portrait;

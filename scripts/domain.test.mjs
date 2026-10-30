@@ -7,6 +7,7 @@ import {
   emptyData,
   filterVisits,
   newVisit,
+  newLead,
   recordVisit,
   summarize,
   today,
@@ -117,6 +118,17 @@ test("base vazia contém apenas a configuração dos produtos e colaboradores so
     TEAM.map((user) => user.name),
     ["Claudionor", "Charles", "Celso", "Recepção", "João", "Túlio"],
   );
+});
+
+test("lead por telefone mantém origem própria e o filtro separa visitas", () => {
+  const lead = newLead("recepcao");
+  assert.equal(lead.source, "lead");
+  const first = recordVisit(emptyData(), draft({ source: "lead", userId: "recepcao" }), ids);
+  const both = recordVisit(first, draft({ source: "visit", workId: "work-1" }), { ...ids, visitId: "visit-2" });
+  assert.equal(filterVisits(both.visits, { source: "lead" }).length, 1);
+  assert.equal(filterVisits(both.visits, { source: "visit" }).length, 1);
+  assert.match(visitsCsv(both.visits), /Origem/);
+  assert.match(visitsCsv(both.visits), /Telefone/);
 });
 
 test("produto cadastrado entra na visita e nos indicadores sem alterar o catálogo inicial", () => {

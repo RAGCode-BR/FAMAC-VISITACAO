@@ -25,6 +25,11 @@ O build está em `dist/`; a prévia do build usa **http://127.0.0.1:4174/**. Cad
 
 ## Esta versão
 
+- Nova entrada **Novo lead** para atendimentos por telefone, com Data do contato, histórico próprio e os mesmos campos da visita. Toda visita e todo lead novos seguem automaticamente ao CRM.
+- O CRM mostra e filtra a origem da oportunidade (telefone, visita ou obra cadastrada). Contatos da mesma obra podem compartilhar uma oportunidade sem perder a origem de cada registro; o cartão abre ao clicar em sua área.
+- Relatórios separam visitas, leads e todas as origens. O filtro padrão permanece em visitas para preservar a leitura de prospecções em campo. O CSV e os fechamentos identificam a origem.
+- Em computadores, a barra lateral mostra somente ícones e se expande ao passar o mouse ou ao receber foco pelo teclado. Em celulares, usa o menu de toque existente.
+
 - Entrada diretamente em Nova visita, com formulário adaptado para celular.
 - Obras com endereço completo, bairro obrigatório e consulta de CEP ao sair do campo completo (Tab no computador ou troca de campo no celular). O botão também permite buscar novamente; preenchimento manual continua disponível.
 - Responsável e telefone opcionais para a prospecção inicial (quando preenchido, telefone exige DDD); empreiteiro e arquiteto com busca e cadastro na própria visita.
@@ -87,7 +92,7 @@ Depois de `npm run build`, execute `npm run test:pages` para verificar o build s
 
 Endereço previsto após uma publicação bem-sucedida: **https://ragcode-br.github.io/FAMAC-VISITACAO/**. Este endereço não comprova que a publicação já aconteceu; confira o resultado do workflow em Actions.
 
-As URLs de recursos são relativas para que logos, favicon, JavaScript e CSS funcionem na subpasta do repositório. O site continua sendo uma prévia sem autenticação e sem banco remoto. Os registros permanecem no navegador que os criou; mudar de dispositivo ou endereço não transfere dados.
+As URLs de recursos são relativas para que logos, favicon, JavaScript e CSS funcionem na subpasta do repositório. A versão publicada usa autenticação e a API do Neon; a prévia local isolada usa IndexedDB e não transfere automaticamente dados entre dispositivos.
 
 Referências: [publicação do Vite no GitHub Pages](https://vite.dev/guide/static-deploy.html#github-pages) e [workflows do GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).
 
