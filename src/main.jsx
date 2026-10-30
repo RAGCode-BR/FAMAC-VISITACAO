@@ -125,6 +125,8 @@ function App({ account, onLogout }) {
   const [page, setPage] = useState("new");
   const [crmFocus, setCrmFocus] = useState(null);
   const [navOpen, setNavOpen] = useState(false);
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const sidebarHoverLocked = useRef(false);
   const [userId, setUserId] = useState(account?.teamId || "claudionor");
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [notice, setNotice] = useState("");
@@ -410,7 +412,25 @@ function App({ account, onLogout }) {
           onClick={() => setNavOpen(false)}
         />
       )}
-      <aside className={`sidebar ${navOpen ? "open" : ""}`} ref={navRef}>
+      <aside
+        className={`sidebar ${navOpen ? "open" : ""} ${sidebarExpanded ? "expanded" : ""}`}
+        ref={navRef}
+        onPointerEnter={(event) => {
+          if (event.pointerType === "mouse" && !sidebarHoverLocked.current) setSidebarExpanded(true);
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType === "mouse") {
+            sidebarHoverLocked.current = false;
+            setSidebarExpanded(false);
+          }
+        }}
+        onFocus={(event) => {
+          if (!sidebarHoverLocked.current && event.target.closest("nav")) setSidebarExpanded(true);
+        }}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setSidebarExpanded(false);
+        }}
+      >
         <div className="sidebar-brand">
           <img className="sidebar-mini-logo" src={`${import.meta.env.BASE_URL}favicon.svg`} alt="FAMAC" />
           <div className="sidebar-logo-frame">
@@ -435,7 +455,12 @@ function App({ account, onLogout }) {
               title={label}
               className={`${page === id ? "active" : ""} ${id === "new" ? "new-visit-nav" : ""}`}
               aria-current={page === id ? "page" : undefined}
-              onClick={() => navigate(id)}
+              onClick={(event) => {
+                sidebarHoverLocked.current = event.detail > 0;
+                setSidebarExpanded(false);
+                navigate(id);
+                requestAnimationFrame(() => document.getElementById("main-content")?.focus({ preventScroll: true }));
+              }}
             >
               <Icon name={icon} size={19} />
               <span>{label}</span>
