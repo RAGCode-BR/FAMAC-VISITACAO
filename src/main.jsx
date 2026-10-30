@@ -293,7 +293,8 @@ function App({ account, onLogout }) {
     persist(() => repository.createCrmOpportunity(workId, stage), "Cartão criado no CRM."), [persist]);
   const changeCrmColumns = useCallback((action) =>
     persist(() => repository.changeCrmColumns(action),
-      action.type === "add" ? "Coluna adicionada." : "Coluna excluída."), [persist]);
+      action.type === "add" ? "Coluna adicionada." :
+        action.type === "reorder" ? "Colunas reordenadas." : "Coluna excluída."), [persist]);
   const updateCrmStageLabels = useCallback((labels) =>
     persist(() => repository.updateCrmStageLabels(labels), "Colunas atualizadas."), [persist]);
   const markNotificationRead = useCallback((id) =>

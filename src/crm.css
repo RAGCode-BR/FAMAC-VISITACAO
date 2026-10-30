@@ -953,3 +953,44 @@ dialog:has(.crm-timeline) h2 {
   }
 }
 .crm-intro-actions { display: flex; gap: .6rem; flex-wrap: wrap; justify-content: flex-end; }
+.crm-reorder-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 18px 0;
+}
+.crm-reorder-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid #e2e7f0;
+  border-radius: 10px;
+  background: #f8f9fc;
+}
+.crm-reorder-position {
+  width: 27px;
+  flex: none;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #526580;
+}
+.crm-reorder-name {
+  flex: 1;
+  min-width: 0;
+  color: #172345;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.crm-reorder-name small {
+  display: block;
+  margin-top: 2px;
+  color: #71819a;
+  font-size: 11px;
+  font-weight: 400;
+}
+.crm-reorder-list .icon-button {
+  flex: none;
+}

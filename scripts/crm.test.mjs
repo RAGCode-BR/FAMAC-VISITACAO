@@ -74,6 +74,27 @@ test("excluir coluna com cartões move os ativos e preserva o histórico", () =>
   assert.throws(() => changeCrmColumns(removed, { type: "delete", stage }), /não encontrada/);
 });
 
+test("reordenar colunas conserva cartões, versões e a etapa inicial das novas obras", () => {
+  const actor = { role: "admin", teamId: "claudionor", name: "Administrador" };
+  const work = { id: crypto.randomUUID(), name: "Hotel", street: "Rua A",
+    number: "10", neighborhood: "Centro", city: "Sorriso", state: "MT" };
+  const initial = createCrmOpportunity(emptyCrm(), work, actor, { stage: "waiting" });
+  const before = initial.stageOrder;
+  const order = ["won", "waiting", "prospecting", "negotiating", "lost"];
+  const after = changeCrmColumns(initial, { type: "reorder", previousOrder: before, order }, actor);
+  assert.deepEqual(after.stageOrder, order);
+  assert.deepEqual(initial.stageOrder, before);
+  assert.equal(after.opportunities[0].stage, "waiting");
+  assert.equal(after.opportunities[0].version, initial.opportunities[0].version);
+  assert.deepEqual(after.activities, initial.activities);
+  assert.throws(() => changeCrmColumns(after, { type: "reorder", previousOrder: before, order }), { status: 409 });
+  assert.throws(() => changeCrmColumns(initial, { type: "reorder", previousOrder: before,
+    order: ["waiting", "waiting", "prospecting", "won", "lost"] }), /ordem válida/);
+  const anotherWork = { ...work, id: crypto.randomUUID(), number: "11" };
+  const next = createCrmOpportunity(after, anotherWork, actor);
+  assert.equal(next.opportunities[1].stage, "prospecting");
+});
+
 test("cartão manual pode ser ocultado e reaberto sem perder vendas e histórico", () => {
   const work = { id: crypto.randomUUID(), name: "Hotel", street: "Rua A", number: "10", complement: "", neighborhood: "Centro", city: "Sorriso", state: "MT", type: "Comercial" };
   const actor = { role: "collaborator", teamId: "claudionor", name: "Claudionor" };

@@ -56,6 +56,7 @@ export default function Crm({
   }, [focus?.nonce]);
   const [addingCard, setAddingCard] = useState(false);
   const [addingColumn, setAddingColumn] = useState(false);
+  const [reorderingColumns, setReorderingColumns] = useState(false);
   const [editingLabel, setEditingLabel] = useState(null);
   const [deletingColumn, setDeletingColumn] = useState(null);
   const [deletingCard, setDeletingCard] = useState(null);
@@ -158,8 +159,12 @@ export default function Crm({
         </div>
         <div className="crm-intro-actions">
           <button className="button secondary" onClick={() => setAddingCard(true)}>Adicionar cartão</button>
-          {(!account || ["admin", "supervisor"].includes(account.role)) &&
-            <button className="button secondary" onClick={() => setAddingColumn(true)}><Icon name="plus" size={16} />Adicionar coluna</button>}
+          {(!account || ["admin", "supervisor"].includes(account.role)) && (
+            <>
+              <button className="button secondary" onClick={() => setAddingColumn(true)}><Icon name="plus" size={16} />Adicionar coluna</button>
+              <button className="button secondary" onClick={() => setReorderingColumns(true)}><Icon name="reorder" size={16} />Reordenar colunas</button>
+            </>
+          )}
           <button className="button primary" onClick={onNew}><Icon name="plus" size={17} />Registrar visita</button>
         </div>
       </div>
@@ -634,6 +639,10 @@ export default function Crm({
       {addingCard && <AddCrmCard works={data.works} stageIds={activeStageIds} labels={labels}
         onCreate={onCreate} onClose={() => setAddingCard(false)} />}
       {addingColumn && <AddCrmColumn onSave={onColumns} onClose={() => setAddingColumn(false)} />}
+      {reorderingColumns && <ReorderCrmColumns order={stageOrder} labels={labels}
+        counts={Object.fromEntries(stageOrder.map((stage) => [stage,
+          crm.opportunities.filter((item) => !item.deleted && item.stage === stage).length]))}
+        onSave={onColumns} onClose={() => setReorderingColumns(false)} />}
       {editingLabel && <EditCrmLabel key={editingLabel} stage={editingLabel} labels={labels}
         onSave={onLabels} onClose={() => setEditingLabel(null)} />}
       {deletingColumn && <DeleteCrmColumn stage={deletingColumn} label={labels[deletingColumn]}
@@ -694,6 +703,56 @@ function AddCrmColumn({ onSave, onClose }) {
       {error && <p className="error" role="alert">{error}</p>}
       <footer className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancelar</button>
         <button className="button primary" disabled={busy}>{busy ? "Salvando…" : "Adicionar coluna"}</button></footer>
+    </form>
+  </Modal>;
+}
+function ReorderCrmColumns({ order: currentOrder, labels, counts, onSave, onClose }) {
+  const [order, setOrder] = useState(currentOrder);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const move = (index, offset) => {
+    setOrder((current) => {
+      const next = [...current];
+      [next[index], next[index + offset]] = [next[index + offset], next[index]];
+      return next;
+    });
+  };
+  const submit = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await onSave({ type: "reorder", previousOrder: currentOrder, order });
+      onClose();
+    } catch (cause) {
+      setError(cause.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const unchanged = order.every((stage, index) => stage === currentOrder[index]);
+  return <Modal title="Reordenar colunas" onClose={busy ? () => {} : onClose}>
+    <form onSubmit={submit}>
+      <p>Use as setas para escolher a posição de cada coluna. Os cartões acompanham suas colunas.</p>
+      <ol className="crm-reorder-list" aria-label="Ordem das colunas">
+        {order.map((stage, index) => <li key={stage}>
+          <span className="crm-reorder-position">{index + 1}</span>
+          <span className="crm-reorder-name">{labels[stage]}<small>{counts[stage]} {counts[stage] === 1 ? "cartão" : "cartões"}</small></span>
+          <button type="button" className="icon-button" disabled={busy || index === 0}
+            aria-label={`Mover ${labels[stage]} para cima`} onClick={() => move(index, -1)}>
+            <Icon name="move-up" size={17} />
+          </button>
+          <button type="button" className="icon-button" disabled={busy || index === order.length - 1}
+            aria-label={`Mover ${labels[stage]} para baixo`} onClick={() => move(index, 1)}>
+            <Icon name="move-down" size={17} />
+          </button>
+        </li>)}
+      </ol>
+      {error && <p className="error" role="alert">{error}</p>}
+      <footer className="modal-actions">
+        <button type="button" className="button secondary" disabled={busy} onClick={onClose}>Cancelar</button>
+        <button className="button primary" disabled={busy || unchanged}>{busy ? "Salvando…" : "Salvar ordem"}</button>
+      </footer>
     </form>
   </Modal>;
 }

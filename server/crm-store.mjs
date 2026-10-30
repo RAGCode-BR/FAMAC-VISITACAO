@@ -220,7 +220,7 @@ export function installCrmRoutes(app, pool, readState) {
     const member = c.get("member");
     if (!["admin", "supervisor"].includes(member.role)) fail("Somente a gestão pode gerenciar colunas.", 403);
     const { action, operationId } = await c.req.json();
-    if (!validId(operationId) || !action || !["add", "delete"].includes(action.type))
+    if (!validId(operationId) || !action || !["add", "delete", "reorder"].includes(action.type))
       fail("Operação de coluna inválida.");
     const db = await pool.connect();
     try {

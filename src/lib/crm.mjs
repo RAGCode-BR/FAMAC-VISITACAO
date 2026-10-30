@@ -19,7 +19,10 @@ export const DEFAULT_CRM_STAGE_ORDER = Object.keys(CRM_STAGES);
 export const crmStageOrder = (crm) => crm?.stageOrder || DEFAULT_CRM_STAGE_ORDER;
 export const crmActiveStageIds = (crm) =>
   crmStageOrder(crm).filter((stage) => !["won", "lost"].includes(stage));
-const firstActiveStage = (crm) => crmActiveStageIds(crm)[0];
+const firstActiveStage = (crm) => {
+  const stages = crmActiveStageIds(crm);
+  return stages.includes("prospecting") ? "prospecting" : stages[0];
+};
 export const emptyCrm = () => ({
   opportunities: [],
   activities: [],
@@ -42,6 +45,22 @@ export function changeCrmColumns(current, input, actor = { name: "Administraçã
     crm.stageOrder = [...order];
     const closedIndex = crm.stageOrder.findIndex((stage) => ["won", "lost"].includes(stage));
     crm.stageOrder.splice(closedIndex < 0 ? crm.stageOrder.length : closedIndex, 0, id);
+  } else if (input.type === "reorder") {
+    ensure(
+      Array.isArray(input.previousOrder) &&
+        input.previousOrder.length === order.length &&
+        input.previousOrder.every((id, index) => id === order[index]),
+      "As colunas mudaram. Atualize o CRM e tente novamente.",
+      409,
+    );
+    ensure(
+      Array.isArray(input.order) &&
+        input.order.length === order.length &&
+        new Set(input.order).size === order.length &&
+        input.order.every((id) => order.includes(id)),
+      "Informe uma ordem válida para todas as colunas.",
+    );
+    crm.stageOrder = [...input.order];
   } else if (input.type === "delete") {
     ensure(order.includes(input.stage), "Coluna não encontrada.", 404);
     ensure(["won", "lost"].includes(input.stage) || crmActiveStageIds(crm).length > 1,

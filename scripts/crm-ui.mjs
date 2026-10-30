@@ -330,6 +330,9 @@ try {
       fullPage: true,
     });
     await page.getByRole("button", { name: /^Em andamento/ }).click();
+    await page.getByRole("button", { name: "Reordenar colunas" }).click();
+    await fits();
+    await modal.getByRole("button", { name: "Cancelar" }).click();
   }
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page.getByRole("button", { name: "Adicionar coluna" }).click();
@@ -341,6 +344,27 @@ try {
   await page.getByRole("region", { name: "Coluna teste", exact: true })
     .locator(".crm-card").filter({ hasText: names[0] }).waitFor();
   assert.equal(await modal.count(), 0);
+  const columnOrder = () => page.locator(".crm-board > .crm-column")
+    .evaluateAll((columns) => columns.map((column) => column.getAttribute("aria-label")));
+  const originalOrder = await columnOrder();
+  await page.getByRole("button", { name: "Reordenar colunas" }).click();
+  await modal.getByRole("button", { name: "Mover Coluna teste para cima" }).click();
+  await modal.getByRole("button", { name: "Cancelar" }).click();
+  assert.deepEqual(await columnOrder(), originalOrder);
+  await page.getByRole("button", { name: "Reordenar colunas" }).click();
+  await modal.getByRole("button", { name: "Mover Coluna teste para cima" }).click();
+  await modal.getByRole("button", { name: "Mover Coluna teste para cima" }).click();
+  await modal.getByRole("button", { name: "Salvar ordem" }).click();
+  await modal.waitFor({ state: "hidden" });
+  assert.equal((await columnOrder())[1], "Coluna teste");
+  await page.getByRole("region", { name: "Coluna teste", exact: true })
+    .locator(".crm-card").filter({ hasText: names[0] }).waitFor();
+  await page.reload();
+  await page.locator(".visit-form").waitFor();
+  await nav("CRM");
+  assert.equal((await columnOrder())[1], "Coluna teste");
+  await page.getByRole("region", { name: "Coluna teste", exact: true })
+    .locator(".crm-card").filter({ hasText: names[0] }).waitFor();
   await page.getByRole("button", { name: "Excluir coluna Coluna teste" }).click();
   await modal.getByText(/será movido para Em prospecção/).waitFor();
   await modal.getByRole("button", { name: "Excluir coluna", exact: true }).click();
