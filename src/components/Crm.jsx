@@ -230,14 +230,18 @@ export default function Crm({
           </button>
         </div>
         <div className="crm-toolbar">
-          <div className="search-input">
+          <div className="field crm-search-field">
+            <label htmlFor="crm-search">Buscar oportunidades</label>
+            <div className="search-input">
             <Icon name="search" size={17} />
             <input
+              id="crm-search"
               aria-label="Buscar oportunidades"
               placeholder="Obra, bairro, contato ou produto…"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
+            </div>
           </div>
           <Select
             label="Vendedor da oportunidade"
@@ -427,6 +431,7 @@ export default function Crm({
                             </div>
                             <button
                               className="crm-card-title"
+                              title={item.work.name}
                               onClick={() =>
                                 open(item, active(item) ? "update" : "details")
                               }
@@ -435,15 +440,12 @@ export default function Crm({
                             </button>
                             <p className="crm-card-address">
                               <Icon name="visit" size={14} />
-                              {item.work.neighborhood} · {item.work.city}
+                              <span title={`${item.work.neighborhood} · ${item.work.city}`}>{item.work.neighborhood} · {item.work.city}</span>
                             </p>
-                            {(item.work.architectName ||
-                              item.work.contractorName) && (
-                              <p className="crm-card-contact">
+                              <p className="crm-card-contact" title={item.work.architectName || item.work.contractorName || ""}>
                                 {item.work.architectName ||
                                   item.work.contractorName}
                               </p>
-                            )}
                             <div className="crm-product-chips">
                               {(active(item)
                                 ? item.pendingProducts
@@ -466,9 +468,9 @@ export default function Crm({
                                 </span>
                               )}
                             </div>
-                            {item.nextAction && active(item) && (
                               <div
-                                className={`crm-card-next ${overdue(item) ? "late" : ""}`}
+                                className={`crm-card-next ${overdue(item) ? "late" : ""} ${!item.nextAction ? "crm-card-next-empty" : ""}`}
+                                title={item.nextAction || "Sem próximo passo definido"}
                               >
                                 <Icon name="clock" size={14} />
                                 <span>
@@ -478,10 +480,9 @@ export default function Crm({
                                       {dateLabel(item.nextDate)}
                                     </strong>
                                   )}
-                                  {item.nextAction}
+                                  {item.nextAction || "Sem próximo passo definido"}
                                 </span>
                               </div>
-                            )}
                             <div className="crm-card-owner">
                               <span className="avatar">
                                 {
@@ -516,17 +517,18 @@ export default function Crm({
                                   )
                                 }
                               >
-                                Abrir oportunidade
+                                Ver detalhes
                                 <Icon name="arrow" size={15} />
                               </button>
                               <button
                                 className="icon-button"
                                 aria-label={`Registrar visita em ${item.work.name}`}
+                                title="Registrar visita"
                                 onClick={() => visit(item)}
                               >
                                 <Icon name="plus" size={18} />
                               </button>
-                              <button className="icon-button" aria-label={`Excluir cartão ${item.work.name}`}
+                              <button className="icon-button" aria-label={`Excluir cartão ${item.work.name}`} title="Excluir cartão"
                                 onClick={() => setDeletingCard(item)}><Icon name="close" size={17} /></button>
                             </footer>
                           </article>

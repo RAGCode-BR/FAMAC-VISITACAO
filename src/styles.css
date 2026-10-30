@@ -345,6 +345,15 @@ button:disabled:hover {
   padding: 18px 20px 28px;
   text-align: center;
 }
+.sidebar-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.sidebar-content::-webkit-scrollbar { display: none; }
 .sidebar-brand img {
   display: block;
   width: 174px;
@@ -3910,28 +3919,30 @@ td > small {
   }
 }
 @media (min-width: 761px) {
-  .sidebar { width: 68px; overflow-x: hidden; transition: width .2s ease; box-shadow: 4px 0 18px #111a3830; }
+  .sidebar { width: 68px; overflow: clip; transition: width .2s ease; box-shadow: 4px 0 18px #111a3830; }
+  .sidebar-content { width: 235px; min-width: 235px; overflow-x: hidden; }
   .sidebar.expanded { width: 235px; }
   .workspace { margin-left: 68px; }
-  .sidebar-brand { height: 182px; min-height: 182px; box-sizing: border-box; padding: 16px 8px 0; overflow: hidden; }
-  .sidebar .nav-group-label { height: 32px; min-height: 32px; box-sizing: border-box; }
-  .sidebar nav button { height: 50px; min-height: 50px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; }
+  .sidebar-brand { position: relative; width: 235px; min-width: 235px; height: 182px; min-height: 182px; box-sizing: border-box; padding: 16px 8px 0; overflow: hidden; }
+  .sidebar .nav-group-label { width: 235px; min-width: 235px; height: 32px; min-height: 32px; box-sizing: border-box; }
+  .sidebar nav { width: 235px; min-width: 235px; box-sizing: border-box; padding: 0 9px; }
+  .sidebar nav button { width: 217px; height: 50px; min-height: 50px; box-sizing: border-box; padding: 0 15px; }
+  .sidebar nav button > svg { flex: 0 0 auto; }
+  .sidebar nav button.active::before { left: -9px; }
+  .sidebar-bottom { width: 235px; min-width: 235px; box-sizing: border-box; }
   .sidebar nav button span:nth-child(2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .sidebar-mini-logo { display: block !important; width: 38px !important; height: 50px !important; object-fit: contain; margin: 0 auto; }
-  .sidebar.expanded .sidebar-mini-logo { display: none !important; }
+  .sidebar-mini-logo { position: absolute; left: 15px; top: 16px; display: block !important; width: 38px !important; height: 50px !important; object-fit: contain; margin: 0; }
+  .sidebar.expanded .sidebar-mini-logo { visibility: hidden; }
   .sidebar:not(.expanded) .sidebar-logo-frame,
   .sidebar:not(.expanded) .brand-tagline,
   .sidebar:not(.expanded) .brand-system,
   .sidebar:not(.expanded) .sidebar-bottom,
   .sidebar:not(.expanded) nav button span,
-  .sidebar:not(.expanded) nav button small { display: none; }
+  .sidebar:not(.expanded) nav button small { visibility: hidden; }
   .sidebar:not(.expanded) .nav-group-label { visibility: hidden; }
-  .sidebar:not(.expanded) nav { padding: 0 9px; }
-  .sidebar:not(.expanded) nav button { width: 50px; justify-content: center; padding-left: 0; padding-right: 0; }
-  .sidebar:not(.expanded) nav button svg { flex: 0 0 auto; }
-  .sidebar:not(.expanded) nav button.active::before { left: -9px; }
+  .sidebar:not(.expanded) nav button { width: 50px; overflow: hidden; }
 }
-.sidebar-mini-logo { display: none; }
+.sidebar .sidebar-mini-logo { display: none; }
 
 @media print {
   @page {

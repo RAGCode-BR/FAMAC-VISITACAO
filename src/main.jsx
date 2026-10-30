@@ -431,6 +431,7 @@ function App({ account, onLogout }) {
           if (!event.currentTarget.contains(event.relatedTarget)) setSidebarExpanded(false);
         }}
       >
+        <div className="sidebar-content">
         <div className="sidebar-brand">
           <img className="sidebar-mini-logo" src={`${import.meta.env.BASE_URL}favicon.svg`} alt="FAMAC" />
           <div className="sidebar-logo-frame">
@@ -485,6 +486,7 @@ function App({ account, onLogout }) {
           <span>
             FAMAC ACABAMENTOS <small>© {today().slice(0, 4)}</small>
           </span>
+        </div>
         </div>
       </aside>
       <div className="workspace">
