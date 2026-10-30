@@ -968,6 +968,22 @@ dialog:has(.crm-timeline) h2 {
   border: 1px solid #e2e7f0;
   border-radius: 10px;
   background: #f8f9fc;
+  cursor: grab;
+  user-select: none;
+}
+.crm-reorder-list li.dragging {
+  opacity: .58;
+  cursor: grabbing;
+}
+.crm-reorder-list li.drop-target {
+  border-color: #7b91bf;
+  background: #edf2fb;
+}
+.crm-reorder-grip {
+  display: inline-flex;
+  flex: none;
+  color: #8291ad;
+  touch-action: none;
 }
 .crm-reorder-position {
   width: 27px;

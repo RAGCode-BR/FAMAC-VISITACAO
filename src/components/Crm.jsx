@@ -710,6 +710,53 @@ function ReorderCrmColumns({ order: currentOrder, labels, counts, onSave, onClos
   const [order, setOrder] = useState(currentOrder);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const drag = useRef(null);
+  const [dragging, setDragging] = useState("");
+  const [dropTarget, setDropTarget] = useState("");
+  const rowAt = (event) => document.elementFromPoint(event.clientX, event.clientY)
+    ?.closest(".crm-reorder-list li[data-stage]");
+  const startDrag = (event, stage) => {
+    if (busy || event.target.closest("button") ||
+      (event.pointerType !== "mouse" && !event.target.closest(".crm-reorder-grip")) ||
+      (event.pointerType === "mouse" && event.button !== 0)) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = { stage, pointerId: event.pointerId };
+    setDragging(stage);
+  };
+  const dragOver = (event) => {
+    if (drag.current?.pointerId !== event.pointerId) return;
+    const target = rowAt(event)?.dataset.stage;
+    setDropTarget(target && target !== drag.current.stage ? target : "");
+    const dialog = event.currentTarget.closest("dialog");
+    const bounds = dialog.getBoundingClientRect();
+    if (event.clientY < bounds.top + 45) dialog.scrollTop -= 12;
+    if (event.clientY > bounds.bottom - 45) dialog.scrollTop += 12;
+  };
+  const finishDrag = (event) => {
+    if (drag.current?.pointerId !== event.pointerId) return;
+    const source = drag.current.stage;
+    const targetRow = rowAt(event);
+    const target = targetRow?.dataset.stage;
+    if (target && target !== source) {
+      const bounds = targetRow.getBoundingClientRect();
+      const after = event.clientY > bounds.top + bounds.height / 2;
+      setOrder((current) => {
+        const next = current.filter((stage) => stage !== source);
+        next.splice(next.indexOf(target) + Number(after), 0, source);
+        return next;
+      });
+    }
+    drag.current = null;
+    setDragging("");
+    setDropTarget("");
+  };
+  const cancelDrag = (event) => {
+    if (drag.current?.pointerId !== event.pointerId) return;
+    drag.current = null;
+    setDragging("");
+    setDropTarget("");
+  };
   const move = (index, offset) => {
     setOrder((current) => {
       const next = [...current];
@@ -733,9 +780,13 @@ function ReorderCrmColumns({ order: currentOrder, labels, counts, onSave, onClos
   const unchanged = order.every((stage, index) => stage === currentOrder[index]);
   return <Modal title="Reordenar colunas" onClose={busy ? () => {} : onClose}>
     <form onSubmit={submit}>
-      <p>Use as setas para escolher a posição de cada coluna. Os cartões acompanham suas colunas.</p>
+      <p>Arraste pelo ícone pontilhado ou use as setas para mudar a ordem. Os cartões acompanham suas colunas.</p>
       <ol className="crm-reorder-list" aria-label="Ordem das colunas">
-        {order.map((stage, index) => <li key={stage}>
+        {order.map((stage, index) => <li key={stage} data-stage={stage}
+          className={`${dragging === stage ? "dragging" : ""} ${dropTarget === stage ? "drop-target" : ""}`}
+          onPointerDown={(event) => startDrag(event, stage)}
+          onPointerMove={dragOver} onPointerUp={finishDrag} onPointerCancel={cancelDrag}>
+          <span className="crm-reorder-grip" aria-hidden="true"><Icon name="grip" size={17} /></span>
           <span className="crm-reorder-position">{index + 1}</span>
           <span className="crm-reorder-name">{labels[stage]}<small>{counts[stage]} {counts[stage] === 1 ? "cartão" : "cartões"}</small></span>
           <button type="button" className="icon-button" disabled={busy || index === 0}

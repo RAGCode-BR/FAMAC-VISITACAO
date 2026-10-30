@@ -29,6 +29,7 @@ const paths = {
   reorder: "M4 7h16 M4 12h16 M4 17h16 M8 4l-3 3 3 3 M16 14l3 3-3 3",
   "move-up": "M12 19V5 M6 11l6-6 6 6",
   "move-down": "M12 5v14 M6 13l6 6 6-6",
+  grip: "M9 5h.01 M15 5h.01 M9 12h.01 M15 12h.01 M9 19h.01 M15 19h.01",
   download: "M12 3v12 m-5-5 5 5 5-5 M4 16v5h16v-5",
   print: "M6 9V3h12v6 M6 17H3V9h18v8h-3 M6 14h12v7H6z M17 12h1",
   trend: "m3 17 6-6 4 4 8-10 M15 5h6v6",

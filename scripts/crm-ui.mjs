@@ -332,6 +332,25 @@ try {
     await page.getByRole("button", { name: /^Em andamento/ }).click();
     await page.getByRole("button", { name: "Reordenar colunas" }).click();
     await fits();
+    if (width === 360) {
+      const touch = await context.newCDPSession(page);
+      await touch.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 1 });
+      const source = await modal.locator('.crm-reorder-list li[data-stage="waiting"] .crm-reorder-grip').boundingBox();
+      const target = await modal.locator('.crm-reorder-list li[data-stage="prospecting"]').boundingBox();
+      const from = { x: source.x + source.width / 2, y: source.y + source.height / 2, id: 1 };
+      const to = { x: target.x + target.width / 2, y: target.y + target.height / 4, id: 1 };
+      await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [from] });
+      for (let step = 1; step <= 8; step++)
+        await touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{
+          x: from.x + (to.x - from.x) * step / 8,
+          y: from.y + (to.y - from.y) * step / 8,
+          id: 1,
+        }] });
+      await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await page.waitForFunction(() => document.querySelector('.crm-reorder-list li')?.dataset.stage === "waiting");
+      await touch.send("Emulation.setTouchEmulationEnabled", { enabled: false });
+      await touch.detach();
+    }
     await modal.getByRole("button", { name: "Cancelar" }).click();
   }
   await page.setViewportSize({ width: 1440, height: 1100 });
@@ -352,8 +371,15 @@ try {
   await modal.getByRole("button", { name: "Cancelar" }).click();
   assert.deepEqual(await columnOrder(), originalOrder);
   await page.getByRole("button", { name: "Reordenar colunas" }).click();
-  await modal.getByRole("button", { name: "Mover Coluna teste para cima" }).click();
-  await modal.getByRole("button", { name: "Mover Coluna teste para cima" }).click();
+  const draggedRow = modal.locator(".crm-reorder-list li").filter({ hasText: "Coluna teste" });
+  const draggedStage = await draggedRow.getAttribute("data-stage");
+  const sourceBox = await draggedRow.locator(".crm-reorder-grip").boundingBox();
+  const targetBox = await modal.locator('.crm-reorder-list li[data-stage="waiting"]').boundingBox();
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 4, { steps: 12 });
+  await page.mouse.up();
+  assert.equal(await modal.locator(".crm-reorder-list li").nth(1).getAttribute("data-stage"), draggedStage);
   await modal.getByRole("button", { name: "Salvar ordem" }).click();
   await modal.waitFor({ state: "hidden" });
   assert.equal((await columnOrder())[1], "Coluna teste");
