@@ -47,6 +47,8 @@ Os arquivos de origem, revisão, plano aplicado e recibo ficam em `test-results/
 
 ## Persistência em produção
 
+Profissionais podem ser excluídos pela administração e por Túlio, mediante confirmação. A exclusão retira o cadastro da equipe e de novos agendamentos, preservando o nome nos serviços anteriores e nos filtros históricos. Agendamentos pendentes exigem reatribuição antes da exclusão. Não há botões de ativar/desativar.
+
 A migração aditiva `010-services.sql` cria o estado operacional, histórico importado e referências de fotos. A API `/services/actions` aplica as mesmas regras da prévia no servidor, com autoria da sessão, sequência de códigos, trava da revisão, conflitos de equipe e idempotência por operação. Atualizações diretas por `/state` são recusadas. Contas comuns não recebem esses dados. Fotos são enviadas ao bucket privado sob `servicos/`; cancelar o formulário não altera arquivos remotos e remoções são limpas após o commit.
 
 O script `import-services-history.mjs` importa somente os 1.422 lançamentos revisados mediante execução explícita; preserva o estado operacional e o financeiro. Arquivos, backups e recibos ficam em `test-results/`, ignorados pelo Git.

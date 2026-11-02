@@ -20,3 +20,14 @@ test("Serviços exige administrador ou Túlio; supervisão de outra conta não c
     assert.deepEqual(next.visits, []);
   }
 });
+
+test("exclusão de profissional é autorizada também no servidor", () => {
+  const admin = { role: "admin", name: "Admin" };
+  const data = applyServiceAction(emptyData(), { type: "installer", draft: { name: "Profissional" } }, admin);
+  const id = data.installers[0].id, action = { type: "deleteInstaller", id };
+  assert.throws(() => applyServiceAction(data, action, { role: "collaborator" }), { status: 403 });
+  assert.throws(() => applyServiceAction(data, { ...action, id: "inválido" }, admin), { status: 400 });
+  const next = applyServiceAction(data, action, { role: "supervisor", teamId: "tulio", name: "Túlio" });
+  assert.equal(next.installers[0].deleted, true);
+  assert.throws(() => applyServiceAction(next, { type: "installer", draft: { id, name: "Reativado" } }, admin), { status: 400 });
+});

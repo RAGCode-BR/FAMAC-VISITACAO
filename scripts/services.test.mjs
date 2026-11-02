@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { emptyData, newVisit, recordVisit, today } from "../src/lib/domain.mjs";
 import { businessSales, reconcileLocalCrm } from "../src/lib/crm.mjs";
-import { appointmentsOverlap, changeServiceStatus, decideInstallation, formatServiceDate, parseServiceDate, newAppointment, newService, saleServiceDraft, saveInstaller, saveService, serviceWeek } from "../src/lib/services.mjs";
+import { appointmentsOverlap, changeServiceStatus, decideInstallation, deleteInstaller, formatServiceDate, parseServiceDate, newAppointment, newService, saleServiceDraft, saveInstaller, saveService, serviceWeek } from "../src/lib/services.mjs";
 
 const draft = (extra = {}) => ({ ...newService(), name: "Obra de teste", address: "Rua A, 10", neighborhood: "Centro", city: "Sorriso", description: "Instalar forro", products: ["FORRO"], ...extra });
 const staffed = () => saveInstaller(emptyData(), { name: "Instalador A" });
@@ -81,4 +81,20 @@ test("datas inválidas e horários invertidos são recusados; equipe não duplic
   assert.equal(data.services[0].appointments[0].state, "cancelled");
   assert.doesNotThrow(() => saveInstaller(data, { ...data.installers[0], inactive: true }));
   assert.deepEqual(serviceWeek("2026-11-01"), ["2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30", "2026-10-31", "2026-11-01"]);
+});
+
+test("excluir profissional preserva serviços antigos e impede edição ou novo agendamento", () => {
+  let data = staffed();
+  const id = data.installers[0].id;
+  data = saveService(data, draft({ appointments: [slot(data)] }), "Administrador");
+  assert.throws(() => deleteInstaller(data, id), /Reatribua.*excluí-lo/);
+  data = changeServiceStatus(data, data.services[0].id, "completed", "Finalizado", "Administrador");
+  const before = structuredClone(data), next = deleteInstaller(data, id);
+  assert.deepEqual(data, before);
+  assert.deepEqual(next.services, before.services);
+  assert.equal(next.installers[0].deleted, true);
+  assert.equal(next.installers[0].name, "Instalador A");
+  assert.throws(() => saveInstaller(next, { id, name: "Reativado" }), /não encontrado/);
+  assert.throws(() => saveService(next, draft({ appointments: [slot(next)] }), "Administrador"), /profissionais disponíveis/);
+  assert.equal(saveInstaller(next, { name: "Instalador A" }).installers.filter((row) => !row.deleted).length, 1);
 });

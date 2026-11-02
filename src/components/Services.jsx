@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { addressLabel, catalogProducts, dateLabel, normalize, person, today } from "../lib/domain.mjs";
-import { SERVICE_PERIODS, SERVICE_STATUSES, SERVICE_TYPES, changeServiceStatus, decideInstallation, newAppointment, newService, saleServiceDraft, saveInstaller, saveService, serviceCode, serviceSales, serviceWeek, shiftServiceDate } from "../lib/services.mjs";
+import { SERVICE_PERIODS, SERVICE_STATUSES, SERVICE_TYPES, changeServiceStatus, decideInstallation, deleteInstaller, newAppointment, newService, saleServiceDraft, saveInstaller, saveService, serviceCode, serviceSales, serviceWeek, shiftServiceDate } from "../lib/services.mjs";
 import { AddressFields, Badge, Empty, Field, Icon, Metric, Modal, Select } from "./ui.jsx";
 import ServiceDateField from "./ServiceDateField.jsx";
 import ServiceHistory from "./ServiceHistory.jsx";
@@ -74,7 +74,7 @@ export default function Services({ data, save, actor, seed }) {
       {!["team", "history"].includes(view) && <div className="services-filters">
         <Field label="Buscar serviços ou vendas" placeholder="Cliente, obra, bairro, produto ou SV…" value={query} onChange={(event) => setQuery(event.target.value)} />
         {view === "sales" ? <Select label="Vendas exibidas" value={salesFilter} onChange={setSalesFilter}><option value="pending">Aguardando avaliação</option><option value="all">Todas as vendas</option></Select> : <>
-          <Select label="Profissional" value={installer} onChange={setInstaller}><option value="">Toda a equipe</option>{(data.installers || []).map((row) => <option key={row.id} value={row.id}>{row.name}{row.inactive ? " (inativo)" : ""}</option>)}</Select>
+          <Select label="Profissional" value={installer} onChange={setInstaller}><option value="">Toda a equipe</option>{(data.installers || []).map((row) => <option key={row.id} value={row.id}>{row.name}{row.deleted ? " (excluído)" : row.inactive ? " (inativo)" : ""}</option>)}</Select>
           <Select label="Situação do serviço" value={status} onChange={setStatus}><option value="">Todas as situações</option>{Object.entries(SERVICE_STATUSES).map(([id, label]) => <option value={id} key={id}>{label}</option>)}</Select>
         </>}
       </div>}
@@ -126,16 +126,19 @@ function InstallerManager({ data, save }) {
     try { await save((current) => saveInstaller(current, draft), "Profissional salvo.", { type: "installer", draft }); setDraft({ name: "" }); }
     catch (cause) { setError(cause.message); } finally { setBusy(false); }
   };
-  const toggle = async (row) => {
-    setError("");
-    try { await save((current) => saveInstaller(current, { ...row, inactive: !row.inactive }), row.inactive ? "Profissional ativado." : "Profissional desativado.", { type: "installer", draft: { ...row, inactive: !row.inactive } }); }
-    catch (cause) { setError(cause.message); }
+  const remove = async (row) => {
+    if (!window.confirm(`Excluir ${row.name} da equipe de execução? Os serviços anteriores serão preservados.`)) return;
+    setError(""); setBusy(true);
+    try {
+      await save((current) => deleteInstaller(current, row.id), "Profissional excluído.", { type: "deleteInstaller", id: row.id });
+      if (draft.id === row.id) setDraft({ name: "" });
+    } catch (cause) { setError(cause.message); } finally { setBusy(false); }
   };
   return <section className="services-team"><div className="panel-heading"><div><h2>Equipe de execução</h2><p>Cadastre os profissionais que fazem os serviços. Esse cadastro não cria acesso ao sistema.</p></div><Icon name="users" /></div>
     <form className="service-installer-form" onSubmit={submit}><Field label="Nome do profissional" value={draft.name} maxLength={180} required onChange={(event) => setDraft({ ...draft, name: event.target.value })} /><button className="button primary" disabled={busy}>{draft.id ? "Salvar profissional" : "Cadastrar profissional"}</button>{draft.id && <button type="button" className="button secondary" onClick={() => setDraft({ name: "" })}>Cancelar edição</button>}</form>
     {error && <p className="error" role="alert">{error}</p>}
-    <div className="services-team-list">{(data.installers || []).map((row) => <article key={row.id}><span className="avatar">{row.name.slice(0, 2).toUpperCase()}</span><strong>{row.name}<small>{row.inactive ? "Inativo" : "Disponível para agendamento"}</small></strong><button className="button secondary" onClick={() => setDraft({ ...row })}>Editar</button><button className="button text-button" onClick={() => toggle(row)}>{row.inactive ? "Ativar" : "Desativar"}</button></article>)}</div>
-    {!data.installers?.length && <Empty title="Quem vai executar os serviços?" description="Cadastre a equipe para começar a distribuir os agendamentos." icon="users" />}
+    <div className="services-team-list">{(data.installers || []).filter((row) => !row.deleted).map((row) => <article key={row.id}><span className="avatar">{row.name.slice(0, 2).toUpperCase()}</span><strong>{row.name}<small>{row.inactive ? "Inativo" : "Disponível para agendamento"}</small></strong><button className="button secondary" disabled={busy} onClick={() => setDraft({ ...row })}>Editar</button><button className="button text-button" disabled={busy} onClick={() => remove(row)}>Excluir</button></article>)}</div>
+    {!data.installers?.some((row) => !row.deleted) && <Empty title="Quem vai executar os serviços?" description="Cadastre a equipe para começar a distribuir os agendamentos." icon="users" />}
   </section>;
 }
 
@@ -186,7 +189,7 @@ function ServiceForm({ initial, data, save, actor, onClose, onSaved }) {
         <div className="fields two"><ServiceDateField label="Data inicial" value={item.date} required onChange={(next) => appointment(item.id, { date: next, endDate: item.endDate < next ? next : item.endDate })} /><ServiceDateField label="Data final" value={item.endDate} min={item.date} required onChange={(next) => appointment(item.id, { endDate: next })} /></div>
         <Select label="Período do serviço" value={item.period} onChange={(period) => appointment(item.id, { period })}>{Object.entries(SERVICE_PERIODS).map(([id, label]) => <option value={id} key={id}>{label}</option>)}</Select>
         {item.period === "custom" && <div className="fields two"><Field label="Horário inicial" type="time" required value={item.startTime} onChange={(event) => appointment(item.id, { startTime: event.target.value })} /><Field label="Horário final" type="time" required value={item.endTime} onChange={(event) => appointment(item.id, { endTime: event.target.value })} /></div>}
-        <span className="service-crew-label">Profissionais deste agendamento</span><div className="service-crew-options">{(data.installers || []).filter((row) => !row.inactive || item.installerIds.includes(row.id)).map((row) => <label key={row.id}><input type="checkbox" checked={item.installerIds.includes(row.id)} onChange={(event) => appointment(item.id, { installerIds: event.target.checked ? [...item.installerIds, row.id] : item.installerIds.filter((id) => id !== row.id) })} />{row.name}</label>)}{!data.installers?.some((row) => !row.inactive) && <p className="muted">Cadastre um profissional abaixo para montar a equipe.</p>}</div>
+        <span className="service-crew-label">Profissionais deste agendamento</span><div className="service-crew-options">{(data.installers || []).filter((row) => !row.deleted && (!row.inactive || item.installerIds.includes(row.id))).map((row) => <label key={row.id}><input type="checkbox" checked={item.installerIds.includes(row.id)} onChange={(event) => appointment(item.id, { installerIds: event.target.checked ? [...item.installerIds, row.id] : item.installerIds.filter((id) => id !== row.id) })} />{row.name}</label>)}{!data.installers?.some((row) => !row.inactive && !row.deleted) && <p className="muted">Cadastre um profissional abaixo para montar a equipe.</p>}</div>
         <button type="button" className="button text-button" onClick={() => update({ appointments: form.appointments.filter((row) => row.id !== item.id) })}><Icon name="trash" size={15} />Remover agendamento</button>
       </fieldset>)}
       <div className="service-inline-installer"><Field label="Novo profissional da equipe" value={installerName} onChange={(event) => setInstallerName(event.target.value)} placeholder="Nome do instalador" maxLength={180} /><button type="button" className="button secondary" onClick={addInstaller} disabled={!installerName.trim()}>Cadastrar profissional</button></div>

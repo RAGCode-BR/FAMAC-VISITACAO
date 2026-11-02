@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { canAccessServices } from "../src/lib/service-access.mjs";
-import { saveService, saveInstaller, changeServiceStatus, decideInstallation } from "../src/lib/services.mjs";
+import { saveService, saveInstaller, deleteInstaller, changeServiceStatus, decideInstallation } from "../src/lib/services.mjs";
 import { fail, validId } from "./policy.mjs";
 
 export function requireServices(member) {
@@ -17,6 +17,10 @@ export function applyServiceAction(state, action, member) {
   try {
     if (action?.type === "save") return saveService(state, action.draft, member.name);
     if (action?.type === "installer") return saveInstaller(state, action.draft);
+    if (action?.type === "deleteInstaller") {
+      if (!validId(action.id)) fail("Profissional inválido.");
+      return deleteInstaller(state, action.id);
+    }
     if (action?.type === "status") return changeServiceStatus(state, action.id, action.status, action.reason, member.name);
     if (action?.type === "decision") return decideInstallation(state, action.saleId, action.decision);
   } catch (error) { fail(error.message); }

@@ -60,7 +60,7 @@ export function validateAppointments(data, appointments, serviceId) {
     fail(new Set(item.installerIds).size === item.installerIds.length, "Profissional repetido no agendamento.");
     const previous = (data.services || []).find((row) => row.id === serviceId)?.appointments.find((row) => row.id === item.id);
     for (const id of item.installerIds) {
-      fail(installers.some((row) => row.id === id && (!row.inactive || previous?.installerIds.includes(id))), "Selecione profissionais ativos da equipe.");
+      fail(installers.some((row) => row.id === id && !row.deleted && (!row.inactive || previous?.installerIds.includes(id))), "Selecione profissionais disponíveis da equipe.");
     }
   }
   const other = (data.services || []).filter((row) => row.id !== serviceId && active(row))
@@ -136,12 +136,18 @@ export function changeServiceStatus(data, id, status, reason, actor, at = new Da
 export function saveInstaller(data, draft) {
   const name = draft.name?.trim();
   fail(name && name.length <= 180, "Informe o nome do profissional.");
-  fail(!(data.installers || []).some((item) => item.id !== draft.id && normalize(item.name) === normalize(name)), "Já existe um profissional com esse nome.");
+  fail(!(data.installers || []).some((item) => !item.deleted && item.id !== draft.id && normalize(item.name) === normalize(name)), "Já existe um profissional com esse nome.");
   const previous = (data.installers || []).find((row) => row.id === draft.id);
-  fail(!draft.id || previous, "Profissional não encontrado.");
+  fail(!draft.id || previous && !previous.deleted, "Profissional não encontrado.");
   if (draft.inactive && !previous?.inactive) fail(!(data.services || []).some((service) => active(service) && service.appointments.some((appt) => appt.state === "planned" && appt.installerIds.includes(draft.id))), "Este profissional possui serviços agendados. Reatribua os agendamentos antes de desativá-lo.");
   const record = { id: previous?.id || uid(), name, inactive: Boolean(draft.inactive) };
   return { ...data, installers: [...(data.installers || []).filter((row) => row.id !== record.id), record] };
+}
+export function deleteInstaller(data, id) {
+  const previous = (data.installers || []).find((row) => row.id === id && !row.deleted);
+  fail(previous, "Profissional não encontrado.");
+  fail(!(data.services || []).some((service) => active(service) && service.appointments.some((appt) => appt.state === "planned" && appt.installerIds.includes(id))), "Este profissional possui serviços agendados. Reatribua os agendamentos antes de excluí-lo.");
+  return { ...data, installers: data.installers.map((row) => row.id === id ? { ...row, deleted: true, inactive: true } : row) };
 }
 export function decideInstallation(data, saleId, decision) {
   fail(serviceSales(data).some((row) => row.id === saleId) && ["not_required", "pending"].includes(decision), "Venda ou decisão inválida.");
