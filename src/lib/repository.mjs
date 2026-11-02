@@ -106,6 +106,34 @@ export const repository = cloudEnabled
   ? cloudRepository
   : {
       ...localRepository,
+      async applyServiceHistoryCleanup(job) {
+        return this.applyServiceHistoryJob(job, true);
+      },
+      async applyServiceHistoryJob(job, cleanup = false) {
+        if (import.meta.env.VITE_FAMAC_MODE !== "local" || !import.meta.env.DEV || location.origin !== job.targetOrigin) throw new Error("A importação exige a prévia local autorizada.");
+        const history = await import("./service-history.mjs");
+        const apply = cleanup ? history.applyServiceHistoryCleanup : history.applyServiceHistoryJob;
+        const db = await database();
+        return new Promise((resolve, reject) => {
+          const transaction = db.transaction("application", "readwrite"), store = transaction.objectStore("application");
+          const request = store.get("state");
+          let result, failure;
+          request.onsuccess = () => {
+            try {
+              const before = request.result || emptyData();
+              result = apply(before, job);
+              if (!result.alreadyApplied) {
+                // Backup e estado são gravados na mesma transação, antes da exclusão.
+                store.put(before, `service-history-backup:${job.id}`);
+                store.put(result.data, "state");
+              }
+            } catch (error) { failure = error; transaction.abort(); }
+          };
+          transaction.oncomplete = () => resolve(result.receipt);
+          transaction.onabort = () => reject(failure || new Error("A importação não foi concluída; os dados anteriores foram preservados."));
+          transaction.onerror = () => {};
+        });
+      },
       setActor(teamId) {
         actorTeamId = teamId;
       },

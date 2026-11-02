@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from "vite";
+import { localServicesHistoryPlugin } from "./scripts/local-services-history-plugin.mjs";
 
 // URLs relativas permitem a mesma versão na raiz local e na pasta do GitHub Pages.
 export default defineConfig(({ mode }) => {
@@ -10,5 +11,5 @@ export default defineConfig(({ mode }) => {
     throw new Error(
       "Configure VITE_NEON_AUTH_URL e VITE_FAMAC_API_URL para publicar a FAMAC conectada.",
     );
-  return { base: "./" };
+  return { base: "./", plugins: env.VITE_FAMAC_MODE === "local" ? [localServicesHistoryPlugin(process.cwd())] : [] };
 });

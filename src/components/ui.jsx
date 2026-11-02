@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { normalize, uid } from "../lib/domain.mjs";
 
 const paths = {
+  tools: "M14 6a5 5 0 0 0-6 6L3 17a3 3 0 0 0 4 4l5-5a5 5 0 0 0 6-6l-3 3-4-4 3-3Z",
   kanban:
     "M3 4h18v16H3z M9 4v16 M15 4v16 M5 8h2 M11 8h2 M17 8h2 M5 12h2 M11 12h2",
   grid: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
@@ -474,7 +475,7 @@ export function ContactPicker({
   );
 }
 
-export function AddressFields({ value, onChange }) {
+export function AddressFields({ value, onChange, requireState = true }) {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const request = useRef(0);
@@ -634,7 +635,7 @@ export function AddressFields({ value, onChange }) {
           label="UF"
           value={value.state}
           onChange={change("state")}
-          required
+          required={requireState}
           maxLength={2}
           pattern="[A-Z]{2}"
           placeholder="UF"

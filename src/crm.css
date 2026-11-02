@@ -1,6 +1,10 @@
 .crm-page {
   --crm-line: #e2e7f0;
 }
+.service-crm-handoff { padding: 16px; margin: 20px 0; border: 1px solid #dce5f3; border-radius: 10px; background: #f8faff; }
+.service-crm-handoff h3 { font-size: 14px; margin: 0 0 13px; color: #405d86; }
+.service-crm-handoff > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; font-size: 12px; color: #7287a8; }
+@media (max-width: 760px) { .service-crm-handoff > div { flex-direction: column; align-items: stretch; } }
 .crm-intro {
   display: flex;
   align-items: center;

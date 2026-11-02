@@ -6,6 +6,14 @@ O projeto original não foi modificado. Nenhum banco, credencial, usuário, cada
 
 ## Executar no computador
 
+Para avaliar **Serviços e Instalações** com dados separados do Neon:
+
+```powershell
+npm run dev:local
+```
+
+Abra **http://127.0.0.1:5174/** e entre na aba **Serviços**. A prévia é local, salva os registros no navegador e não usa as contas nem os dados da produção. Em produção, Serviços é restrito ao administrador e Túlio, com salvamento no Neon e fotos privadas. Veja o [guia de Serviços](docs/SERVICOS_PREVIA.md).
+
 Requer Node.js 24 e npm.
 
 ```powershell

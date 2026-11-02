@@ -19,6 +19,8 @@ import {
   validateRecord,
 } from "./policy.mjs";
 import { connectionString } from "./connection.mjs";
+import { canAccessServices } from "../src/lib/service-access.mjs";
+import { readServices, installServiceRoutes } from "./services-store.mjs";
 import {
   deleteCrmVisit,
   installCrmRoutes,
@@ -62,7 +64,7 @@ app.use("*", async (c, next) => {
   if (c.req.method === "OPTIONS") return c.body(null, 204);
   await next();
 });
-app.get("/health", (c) => c.json({ status: "ok", application: "famac" }));
+app.get("/health", (c) => c.json({ status: "ok", application: "famac", services: 1 }));
 app.use("*", async (c, next) => {
   const authorization = c.req.header("Authorization");
   if (!authorization?.startsWith("Bearer "))
@@ -124,6 +126,7 @@ async function readState(db, member, since) {
     }));
   }
   state.crm = visibleCrm(await readCrm(db), member);
+  if (canAccessServices(member)) Object.assign(state, await readServices(db));
   state.sellers = (await db.query(
     "SELECT team_id FROM famac.members WHERE active=true AND role='collaborator' AND team_id IS NOT NULL ORDER BY name",
   )).rows.map((row) => row.team_id);
@@ -156,6 +159,7 @@ async function snapshot(member, since) {
     db.release();
   }
 }
+installServiceRoutes(app, { pool, readState, files });
 app.get("/me", (c) => c.json(c.get("member")));
 app.get("/members", async (c) => {
   if (c.get("member").role !== "admin")
@@ -345,6 +349,10 @@ app.put("/state", async (c) => {
         409,
       );
     const before = await readState(db, member);
+    for (const key of ["services", "installers", "serviceDecisions", "nextInstallationNumber", "serviceHistory", "serviceHistoryImports"]) {
+      if (state[key] !== undefined && !isDeepStrictEqual(state[key], before[key]))
+        fail("Serviços deve ser atualizado pelas ações autorizadas da agenda.", 403);
+    }
     const visitWorkIds = new Set(state.visits
       .filter((visit) => !before.visits.some((existing) => existing.id === visit.id))
       .map((visit) => visit.workId));

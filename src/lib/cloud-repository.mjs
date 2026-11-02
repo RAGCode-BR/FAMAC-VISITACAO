@@ -9,6 +9,33 @@ export const cloudRepository = {
   load() {
     return api("/state");
   },
+  async serviceAction(action, revision) {
+    const operationId = crypto.randomUUID(), uploaded = [];
+    let uncertain = false;
+    const request = structuredClone(action);
+    try {
+      if (request.type === "save") for (let index = 0; index < request.draft.photos.length; index++) {
+        const photo = request.draft.photos[index];
+        if (photo.key) continue;
+        const remote = await api("/service-photos", { method: "POST", body: JSON.stringify({ name: photo.name, content: photo.url }) });
+        uploaded.push(remote.id); request.draft.photos[index] = remote;
+      }
+      try {
+        return await api("/services/actions", { method: "POST", body: JSON.stringify({ action: request, revision, operationId }) });
+      } catch (error) {
+        if (!error.status) {
+          uncertain = true;
+          const outcome = await api(`/operations/${operationId}`).catch(() => null);
+          if (outcome?.committed) return this.load();
+          error.message = "Não foi possível confirmar o serviço. Confira a agenda antes de tentar novamente.";
+        }
+        throw error;
+      }
+    } catch (error) {
+      if (!uncertain) await Promise.allSettled(uploaded.map((id) => api(`/service-photos/${id}`, { method: "DELETE" })));
+      throw error;
+    }
+  },
   crmProspecting(opportunityId, signal) {
     return api(`/crm/${opportunityId}/prospecting`, { signal });
   },
@@ -111,7 +138,7 @@ export const cloudRepository = {
     const cached = !refresh && photoCache.get(photo.id);
     if (cached && cached.until > Date.now()) return cached.url;
     const { url } = await api(
-      `/${photo.scope === "product" ? "product-photos" : "photos"}/${photo.id}/url`,
+      `/${photo.scope === "service" ? "service-photos" : photo.scope === "product" ? "product-photos" : "photos"}/${photo.id}/url`,
     );
     photoCache.set(photo.id, { url, until: Date.now() + 240000 });
     return url;

@@ -1,0 +1,83 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { request } from "playwright";
+import pg from "pg";
+import { connectionString } from "../server/connection.mjs";
+import { pinIdentity } from "../src/lib/identity.mjs";
+import { newVisit, recordVisit } from "../src/lib/domain.mjs";
+import { newService, newAppointment, saleServiceDraft } from "../src/lib/services.mjs";
+import { businessSales } from "../src/lib/crm.mjs";
+
+if (!process.env.NEON_BRANCH?.startsWith("famac-e2e-")) throw new Error("Teste exige branch temporária.");
+const access = JSON.parse(await readFile("test-results/services-neon-access.local", "utf8"));
+assert.equal(access.branch, process.env.NEON_BRANCH);
+const db = new pg.Client({ connectionString: connectionString(process.env.DATABASE_URL_UNPOOLED) });
+await db.connect();
+const contexts = [], base = process.env.NEON_FUNCTION_FAMACAPI_BASE_URL.replace(/\/$/, ""), origin = "http://127.0.0.1:5174";
+async function login(account) {
+  const context = await request.newContext({ extraHTTPHeaders: { Origin: origin } }); contexts.push(context);
+  const response = await context.post(`${process.env.NEON_AUTH_BASE_URL}/sign-in/email`, { data: { email: pinIdentity(account.pin), password: account.password } });
+  assert.equal(response.status(), 200, "Login na branch temporária");
+  const tokenResponse = await context.get(`${process.env.NEON_AUTH_BASE_URL}/token`);
+  const token = (await tokenResponse.json()).token;
+  assert.equal(typeof token, "string");
+  return async (path, method = "GET", body) => {
+    const result = await context.fetch(`${base}${path}`, { method, headers: { Authorization: `Bearer ${token}` }, ...(body ? { data: body } : {}) });
+    return { status: result.status(), body: result.status() === 204 ? null : await result.json() };
+  };
+}
+const ok = (result) => { assert.equal(result.status, 200, result.body?.error); return result.body; };
+try {
+  const supervisor = access.accounts.find((row) => row.teamId === "celso");
+  await db.query("UPDATE famac.members SET role='supervisor',team_id='tulio',name='Túlio' WHERE auth_id=$1", [supervisor.authId]);
+  const admin = await login(access.accounts.find((row) => row.role === "admin"));
+  const collaborator = await login(access.accounts.find((row) => row.teamId === "claudionor"));
+  const tulio = await login(supervisor);
+  const absent = ok(await collaborator("/state"));
+  assert.equal(absent.services, undefined); assert.equal(absent.serviceHistory, undefined); assert.equal(absent.installers, undefined);
+  for (const [path, method, body] of [["/services/actions", "POST", {}], ["/service-photos", "POST", {}], [`/service-photos/${crypto.randomUUID()}/url`, "GET"], [`/service-photos/${crypto.randomUUID()}`, "DELETE"]]) assert.equal((await collaborator(path, method, body)).status, 403);
+  const draft = { ...newVisit("claudionor"), workName: "Obra de integração de serviços", street: "Rua de teste", number: "10", neighborhood: "Centro", city: "Sorriso", state: "MT", offered: ["FORRO"], sold: ["FORRO"], saleValue: "350", stage: "closing" };
+  const proposed = recordVisit(absent, draft);
+  ok(await collaborator("/state", "PUT", { state: proposed, revision: absent.revision, actorTeamId: "claudionor", operationId: crypto.randomUUID() }));
+  let state = ok(await admin("/state"));
+  const sale = businessSales(state)[0], initialSales = JSON.stringify(businessSales(state));
+  assert.equal(sale.value, 350);
+  const act = async (caller, action, operationId = crypto.randomUUID(), revision = state.revision) => {
+    const result = await caller("/services/actions", "POST", { action, operationId, revision });
+    if (result.status === 200) state = result.body;
+    return result;
+  };
+  ok(await act(tulio, { type: "installer", draft: { name: "Instalador de integração" } }));
+  const bytes = await readFile("public/famac-logo.jpg");
+  const upload = await admin("/service-photos", "POST", { name: "foto-teste.jpg", content: `data:image/jpeg;base64,${bytes.toString("base64")}` });
+  assert.equal(upload.status, 201);
+  const photo = upload.body, slot = { ...newAppointment("2026-11-03"), installerIds: [state.installers[0].id] };
+  const action = { type: "save", draft: { ...saleServiceDraft(sale), photos: [photo], appointments: [slot], history: [{ actor: "Forjado" }], number: 999 } };
+  const operationId = crypto.randomUUID(), revision = state.revision;
+  ok(await act(admin, action, operationId));
+  const service = state.services[0];
+  assert.equal(service.number, 1); assert.equal(service.status, "scheduled"); assert.equal(service.history[0].actor, "Administrador");
+  ok(await act(admin, action, operationId, revision)); assert.equal(state.services.length, 1);
+  assert.equal((await act(tulio, { type: "save", draft: { ...newService(), name: "Conflito", address: "Rua B", neighborhood: "Centro", city: "Sorriso", description: "Serviço", appointments: [{ ...slot, id: crypto.randomUUID() }] } })).status, 400);
+  assert.equal((await act(admin, { type: "installer", draft: { name: "Revisão antiga" } }, crypto.randomUUID(), revision)).status, 409);
+  assert.equal((await collaborator(`/service-photos/${photo.id}/url`)).status, 403);
+  const url = ok(await tulio(`/service-photos/${photo.id}/url`)).url;
+  const image = await contexts[0].get(url); assert.equal(image.status(), 200); assert.equal((await image.body()).length, bytes.length);
+  assert.notEqual((await contexts[0].get(url.split("?")[0])).status(), 200, "Bucket deve ser privado");
+  assert.equal((await admin("/state", "PUT", { state: { ...state, services: [] }, revision: state.revision, actorTeamId: "claudionor", operationId: crypto.randomUUID() })).status, 403);
+  ok(await act(tulio, { type: "status", id: service.id, status: "in_progress", reason: "Iniciado" }));
+  ok(await act(tulio, { type: "status", id: service.id, status: "return_required", reason: "Falta material" }));
+  assert.equal(state.services[0].appointments[0].state, "completed");
+  ok(await act(admin, { type: "save", draft: { ...state.services[0], appointments: [...state.services[0].appointments, { ...newAppointment("2026-11-04"), installerIds: [state.installers[0].id] }] } }));
+  ok(await act(tulio, { type: "status", id: service.id, status: "completed", reason: "Finalizado" }));
+  assert.equal(state.services[0].status, "completed");
+  assert.equal(state.services[0].history.at(-1).actor, "Túlio");
+  assert.equal(JSON.stringify(businessSales(state)), initialSales);
+  const reloaded = ok(await tulio("/state")); assert.equal(reloaded.services[0].status, "completed");
+  assert.equal((await tulio(`/state?since=${state.revision}`)).status, 204);
+  console.log("PASS: Neon real — venda gera serviço sem duplicar financeiro; equipe, conflitos, sequência e autoria no servidor; execução, retorno, conclusão e persistência entre ADM/Túlio; revisão, idempotência, fotos privadas e bloqueio do colaborador.");
+  // Guardar a sessão de teste somente no arquivo privado para verificar a interface.
+  await contexts[0].storageState({ path: "test-results/services-admin-session.local.json" });
+  await contexts[2].storageState({ path: "test-results/services-tulio-session.local.json" });
+  await contexts[1].storageState({ path: "test-results/services-collaborator-session.local.json" });
+} finally { await Promise.allSettled(contexts.map((context) => context.dispose())); await db.end(); }

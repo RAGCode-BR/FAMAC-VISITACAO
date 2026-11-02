@@ -61,30 +61,34 @@ try {
   });
   const url = `http://127.0.0.1:${server.address().port}${base}`;
   assert.equal((await page.goto(url)).status(), 200);
-  await page
-    .getByRole("heading", { name: "Cada visita, uma oportunidade." })
-    .waitFor();
-  await page.locator(".sidebar-logo-frame img").evaluate((image) => image.decode());
-  assert.equal(await page.locator(".product-option").count(), 14);
+  await page.locator(".login-page, .visit-form").first().waitFor();
+  const connected = await page.locator(".login-page").count() > 0;
+  if (connected) {
+    await page.getByLabel(/^PIN/).waitFor();
+    await page.locator(".login-brand img").evaluate((image) => image.decode());
+  } else {
+    await page.locator(".sidebar-logo-frame img").evaluate((image) => image.decode());
+    assert.equal(await page.locator(".product-option").count(), 14);
+  }
   const favicon = await page.locator('link[rel="icon"]').getAttribute("href");
   assert.equal(
     (await page.request.get(new URL(favicon, url).href)).status(),
     200,
   );
-  await page
-    .getByRole("navigation", { name: "Navegação principal" })
-    .getByRole("button", { name: "Relatórios", exact: true })
-    .click();
-  await page.locator(".print-heading img").evaluate((image) => image.decode());
-  assert.equal(await page.locator(".reports-page").count(), 1);
+  if (!connected) {
+    await page
+      .getByRole("navigation", { name: "Navegação principal" })
+      .getByRole("button", { name: "Relatórios", exact: true })
+      .click();
+    await page.locator(".print-heading img").evaluate((image) => image.decode());
+    assert.equal(await page.locator(".reports-page").count(), 1);
+  }
   await page.reload();
-  await page
-    .getByRole("heading", { name: "Cada visita, uma oportunidade." })
-    .waitFor();
+  await page.locator(connected ? ".login-page" : ".visit-form").waitFor();
   assert.deepEqual(missing, []);
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: build em /FAMAC-VISITACAO/, JS/CSS/logo/favicon, relatórios e recarga sem 404 nem erros de interface",
+    "PASS: build em /FAMAC-VISITACAO/, JS/CSS/logo/favicon e recarga sem 404 nem erros de interface",
   );
 } finally {
   await browser?.close();

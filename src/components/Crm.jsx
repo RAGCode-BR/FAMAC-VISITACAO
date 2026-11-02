@@ -40,6 +40,7 @@ export default function Crm({
   onLabels,
   onVisit,
   onNew,
+  onServices,
   focus,
 }) {
   const crm = data.crm || emptyCrm();
@@ -652,6 +653,7 @@ export default function Crm({
           onAction={onAction}
           onClose={() => setDialog(null)}
           onVisit={() => visit(selected)}
+          onServices={onServices}
           onMode={(type) => open(selected, type)}
           labels={labels}
           stageOrder={stageOrder}
@@ -901,6 +903,7 @@ function CrmDialog({
   onAction,
   onClose,
   onVisit,
+  onServices,
   onMode,
   labels,
   stageOrder,
@@ -1277,6 +1280,10 @@ function CrmDialog({
           </footer>
         </form>
       )}
+      {onServices && crm.sales.some((sale) => sale.opportunityId === item.id) && <section className="service-crm-handoff">
+        <h3>Serviços após a venda</h3>
+        {crm.sales.filter((sale) => sale.opportunityId === item.id).map((sale) => <div key={sale.id}><span>{dateLabel(sale.date)} · {sale.products.join(", ")}</span><button className="button secondary" onClick={() => { onClose(); onServices(sale.id); }}><Icon name="tools" size={16} />Criar serviço</button></div>)}
+      </section>}
       <section className="crm-timeline" aria-label="Histórico da oportunidade">
         <h3>Uma história construída pela equipe</h3>
         {events.map((event) => (

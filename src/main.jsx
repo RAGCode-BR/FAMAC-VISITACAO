@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { TEAM, contactOrigin, emptyData, today } from "./lib/domain.mjs";
 import { repository } from "./lib/repository.mjs";
+import { cloudEnabled } from "./lib/auth.mjs";
+import { canAccessServices } from "./lib/service-access.mjs";
 import { isSharedContact } from "./lib/contacts.mjs";
 import { Badge, Icon, Modal } from "./components/ui.jsx";
 import VisitForm from "./components/VisitForm.jsx";
@@ -23,6 +25,9 @@ import "./styles.css";
 import "./readability.css";
 import "./auth.css";
 
+const SERVICES_PREVIEW = import.meta.env.VITE_FAMAC_MODE === "local" && !cloudEnabled;
+const Services = React.lazy(() => import("./components/Services.jsx"));
+
 const NAV = [
   ["overview", "grid", "Visão geral"],
   ["new", "plus", "Nova visita"],
@@ -30,6 +35,7 @@ const NAV = [
   ["visits", "visit", "Visitas realizadas"],
   ["crm", "kanban", "CRM"],
   ["schedule", "calendar", "Programação"],
+  ["services", "tools", "Serviços"],
   ["works", "building", "Obras"],
   ["contacts", "users", "Contatos"],
   ["reports", "chart", "Relatórios"],
@@ -37,6 +43,7 @@ const NAV = [
   ["team", "users", "Colaboradores"],
 ];
 const PAGE = {
+  services: ["SERVIÇOS E INSTALAÇÕES", "Da venda à entrega, cada etapa no lugar.", "Organize a execução, acompanhe a equipe e cuide dos próximos retornos."],
   lead: ["NOVO LEAD", "Cada contato abre uma possibilidade.", "Registre o atendimento por telefone e acompanhe o próximo passo no CRM."],
   crm: [
     "CRM DE OPORTUNIDADES",
@@ -117,6 +124,7 @@ function App({ account, onLogout }) {
   const canAssign = !account || account.role === "admin";
   const canManageSeller = !account || ["admin", "supervisor"].includes(account.role);
   const canManageCatalog = canManageSeller;
+  const canManageServices = SERVICES_PREVIEW || canAccessServices(account);
   const [data, setData] = useState(emptyData);
   const dataRef = useRef(data);
   const saving = useRef(false);
@@ -124,6 +132,7 @@ function App({ account, onLogout }) {
   const [loadError, setLoadError] = useState("");
   const [page, setPage] = useState("new");
   const [crmFocus, setCrmFocus] = useState(null);
+  const [serviceSeed, setServiceSeed] = useState(null);
   const [navOpen, setNavOpen] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const sidebarHoverLocked = useRef(false);
@@ -147,8 +156,16 @@ function App({ account, onLogout }) {
   }, [userId]);
   useEffect(() => {
     let active = true;
-    repository
-      .load()
+    const load = async () => {
+      if (SERVICES_PREVIEW && import.meta.env.DEV) {
+        try {
+          const { applyPendingServiceHistory } = await import("./lib/service-history-client.mjs");
+          await applyPendingServiceHistory(repository);
+        } catch (error) { if (active) setNotice(`Histórico não importado: ${error.message}`); }
+      }
+      return repository.load();
+    };
+    load()
       .then((next) => {
         if (active) {
           dataRef.current = next;
@@ -293,6 +310,10 @@ function App({ account, onLogout }) {
       ),
     [persist],
   );
+  const saveServices = useCallback((updater, message, action) =>
+    cloudEnabled
+      ? persist((current) => repository.serviceAction(action, current.revision), message)
+      : save(updater, message), [persist, save]);
   const deleteRecord = useCallback((kind, id) =>
     persist(() => repository.deleteRecord(kind, id), kind === "works" ? "Obra excluída." : "Programação excluída."), [persist]);
   const createCrmOpportunity = useCallback((workId, stage) =>
@@ -373,7 +394,7 @@ function App({ account, onLogout }) {
   const visibleWorksCount = operationalData.works.filter(
     (item) => !item.deleted,
   ).length;
-  const navigation = NAV.filter(([id]) => id !== "team" || canAssign);
+  const navigation = NAV.filter(([id]) => (id !== "team" || canAssign) && (id !== "services" || canManageServices));
   const metadata = PAGE[page];
   if (loading || loadError)
     return (
@@ -662,6 +683,7 @@ function App({ account, onLogout }) {
                 startVisit({ crmOpportunityId: opportunity.id, userId })
               }
               onNew={() => navigate("new")}
+              onServices={canManageServices ? (saleId) => { setServiceSeed({ saleId, nonce: Date.now() }); navigate("services"); } : undefined}
               focus={crmFocus}
             />
           )}
@@ -679,6 +701,7 @@ function App({ account, onLogout }) {
               onCrmAction={crmAction}
             />
           )}
+          {page === "services" && canManageServices && <React.Suspense fallback={<p role="status">Carregando agenda de serviços…</p>}><Services data={data} save={saveServices} actor={account?.name || user.name} seed={serviceSeed} /></React.Suspense>}
           {page === "reports" && (
             <Reports
               data={data}
