@@ -57,7 +57,7 @@ try {
     await button("Cadastrar profissional").click();
     await page.locator(".services-team-list article", { hasText: name }).waitFor();
   }
-  await button("Novo serviço").click();
+  await button("Serviço avulso").click();
   await fillService("Obra Alfa");
   await dialog().getByLabel("CEP", { exact: true }).fill("78550000");
   await dialog().getByLabel("CEP", { exact: true }).press("Tab");
@@ -96,11 +96,12 @@ try {
   });
   await page.reload(); await nav("Serviços");
   await button("Vendas para instalação").click();
+  await page.getByLabel("Vendas exibidas").selectOption("all");
   await page.getByRole("row", { name: /Venda Beta/ }).getByRole("button", { name: "Gerar serviço", exact: true }).click();
   assert.equal(await dialog().getByLabel("Cliente / obra").inputValue(), "Venda Beta");
   await schedule(); await saveForm();
   await button("Fechar janela").click();
-  await button("Novo serviço").click(); await fillService("Obra Gama"); await schedule();
+  await button("Serviço avulso").click(); await fillService("Obra Gama"); await schedule();
   await dialog().getByRole("button", { name: "Salvar serviço" }).click();
   await dialog().getByRole("alert").getByText(/já possui agendamento/).waitFor();
   await dialog().getByLabel("Período do serviço").selectOption("afternoon");

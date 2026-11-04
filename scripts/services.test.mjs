@@ -65,7 +65,8 @@ test("retorno e reagendamento conservam autoria, períodos anteriores e históri
   assert.match(JSON.stringify(data.services[0].history), /Faltou uma peça/);
   data = changeServiceStatus(data, id, "completed", "Finalizado", "Instalador");
   assert.ok(data.services[0].appointments.every((item) => item.state === "completed"));
-  assert.throws(() => saveService(data, data.services[0], "Recepção"), /Reabra/);
+  assert.equal(saveService(data, { ...data.services[0], notes: "Foto e orientações revisadas" }, "Recepção").services[0].status, "completed");
+  assert.throws(() => saveService(data, { ...data.services[0], appointments: [...data.services[0].appointments, slot(data)] }, "Recepção"), /Reabra/);
   data = changeServiceStatus(data, id, "return_required", "Ajuste solicitado", "Recepção");
   assert.equal(data.services[0].history[0].actor, "Recepção");
 });

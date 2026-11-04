@@ -27,7 +27,7 @@ try {
         await page.waitForFunction(() => document.querySelector("dialog img")?.naturalWidth > 0);
         await page.getByRole("dialog").getByRole("button", { name: /Fechar/ }).first().click();
         if (role === "admin") {
-          await page.getByRole("button", { name: "Novo serviço", exact: true }).click();
+          await page.getByRole("button", { name: "Serviço avulso", exact: true }).click();
           const form = page.locator(".service-form");
           await form.getByLabel("Cliente / obra").fill("Serviço pela interface conectada");
           await form.getByLabel("Serviço a executar").fill("Instalar forro");

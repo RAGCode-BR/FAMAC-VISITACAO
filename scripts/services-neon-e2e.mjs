@@ -7,6 +7,7 @@ import { pinIdentity } from "../src/lib/identity.mjs";
 import { newVisit, recordVisit } from "../src/lib/domain.mjs";
 import { newService, newAppointment, saleServiceDraft } from "../src/lib/services.mjs";
 import { businessSales } from "../src/lib/crm.mjs";
+import { installationQueue } from "../src/lib/service-operations.mjs";
 
 if (!process.env.NEON_BRANCH?.startsWith("famac-e2e-")) throw new Error("Teste exige branch temporária.");
 const access = JSON.parse(await readFile("test-results/services-neon-access.local", "utf8"));
@@ -36,12 +37,13 @@ try {
   const absent = ok(await collaborator("/state"));
   assert.equal(absent.services, undefined); assert.equal(absent.serviceHistory, undefined); assert.equal(absent.installers, undefined);
   for (const [path, method, body] of [["/services/actions", "POST", {}], ["/service-photos", "POST", {}], [`/service-photos/${crypto.randomUUID()}/url`, "GET"], [`/service-photos/${crypto.randomUUID()}`, "DELETE"]]) assert.equal((await collaborator(path, method, body)).status, 403);
-  const draft = { ...newVisit("claudionor"), workName: "Obra de integração de serviços", street: "Rua de teste", number: "10", neighborhood: "Centro", city: "Sorriso", state: "MT", offered: ["FORRO"], sold: ["FORRO"], saleValue: "350", stage: "closing" };
+  const draft = { ...newVisit("claudionor"), workName: "Obra de integração de serviços", street: "Rua de teste", number: "10", neighborhood: "Centro", city: "Sorriso", state: "MT", offered: ["FORRO"], sold: ["FORRO"], saleValue: "350", stage: "closing", requiresInstallation: true };
   const proposed = recordVisit(absent, draft);
   ok(await collaborator("/state", "PUT", { state: proposed, revision: absent.revision, actorTeamId: "claudionor", operationId: crypto.randomUUID() }));
   let state = ok(await admin("/state"));
   const sale = businessSales(state)[0], initialSales = JSON.stringify(businessSales(state));
   assert.equal(sale.value, 350);
+  assert.equal(installationQueue(state).length, 1);
   const act = async (caller, action, operationId = crypto.randomUUID(), revision = state.revision) => {
     const result = await caller("/services/actions", "POST", { action, operationId, revision });
     if (result.status === 200) state = result.body;
@@ -75,6 +77,30 @@ try {
   assert.equal(JSON.stringify(businessSales(state)), initialSales);
   const reloaded = ok(await tulio("/state")); assert.equal(reloaded.services[0].status, "completed");
   assert.equal((await tulio(`/state?since=${state.revision}`)).status, 204);
+  const planned = { ...newAppointment("2026-11-10"), endDate: "2026-11-12", installerIds: [state.installers[0].id] };
+  const baseDraft = { ...newService(), origin: "legacy", address: "Rua antiga", neighborhood: "Centro", city: "Sorriso", description: "Instalar material já vendido" };
+  ok(await act(admin, { type: "save", draft: { ...baseDraft, name: "Origem das operações", appointments: [planned] } }));
+  const sourceId = state.services.at(-1).id;
+  ok(await act(tulio, { type: "save", draft: { ...baseDraft, name: "Destino das operações" } }));
+  const targetId = state.services.at(-1).id, transferId = crypto.randomUUID(), transferRevision = state.revision;
+  const transfer = { type: "transferAppointment", id: sourceId, appointmentId: planned.id, day: "2026-11-11", date: "2026-11-11", period: "morning", targetId, installerIds: planned.installerIds, reason: "Foi para outra obra" };
+  ok(await act(tulio, transfer, transferId));
+  ok(await act(tulio, transfer, transferId, transferRevision));
+  let target = state.services.find((row) => row.id === targetId);
+  assert.equal(target.appointments.filter((row) => row.state === "planned").length, 1);
+  assert.equal(state.services.find((row) => row.id === sourceId).appointments.filter((row) => row.state === "planned").length, 2);
+  assert.equal(state.services.find((row) => row.id === sourceId).appointments.find((row) => row.state === "transferred").destinationName, "Destino das operações");
+  const targetSlot = target.appointments[0].id;
+  ok(await act(admin, { type: "moveAppointment", id: targetId, appointmentId: targetSlot, day: "2026-11-11", date: "2026-11-12", period: "afternoon" }));
+  target = state.services.find((row) => row.id === targetId);
+  const movedSlot = target.appointments.find((row) => row.state === "planned");
+  ok(await act(tulio, { type: "cancelAppointment", id: targetId, appointmentId: movedSlot.id, day: "2026-11-12", reason: "Compromisso retirado" }));
+  assert.equal(state.services.find((row) => row.id === targetId).deleted, undefined);
+  ok(await act(admin, { type: "deleteService", id: sourceId, reason: "Serviço encerrado" }));
+  assert.equal(state.services.find((row) => row.id === sourceId).deleted, true);
+  assert.equal(JSON.stringify(businessSales(state)), initialSales);
+  assert.equal(installationQueue(state).some((row) => row.id === sourceId), false);
+  console.log("PASS: agenda real — transferência de um dia mantém outros dias, replay não duplica, reagendamento e exclusão de compromisso/serviço preservam venda e histórico.");
   console.log("PASS: Neon real — venda gera serviço sem duplicar financeiro; equipe, conflitos, sequência e autoria no servidor; execução, retorno, conclusão e persistência entre ADM/Túlio; revisão, idempotência, fotos privadas e bloqueio do colaborador.");
   // Guardar a sessão de teste somente no arquivo privado para verificar a interface.
   await contexts[0].storageState({ path: "test-results/services-admin-session.local.json" });

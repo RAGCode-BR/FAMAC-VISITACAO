@@ -520,6 +520,7 @@ export default function VisitForm({
               />
             </div>
           )}
+          {form.stage === "closing" && !form.crmSaleId && <label className="inline-note"><input type="checkbox" checked={form.requiresInstallation === true} onChange={(event) => update({ requiresInstallation: event.target.checked })} /> Esta venda precisa de instalação</label>}
           <Field label="O que foi conversado / oferecido?">
             <textarea
               value={form.notes}

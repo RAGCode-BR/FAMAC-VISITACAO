@@ -292,6 +292,7 @@ function addSale(
     "Selecione os produtos vendidos.",
   );
   ensure(team(input.sellerTeamId), "Selecione quem realizou a venda.");
+  ensure(input.requiresInstallation === undefined || typeof input.requiresInstallation === "boolean", "Informe se a venda precisa de instalação.");
   ensure(
     dateValid(input.date) && input.date <= today(),
     "Informe uma data de venda válida, até hoje.",
@@ -317,6 +318,7 @@ function addSale(
     source: opportunity.source || "visit",
     date: input.date,
     products: [...input.products],
+    requiresInstallation: input.requiresInstallation === true,
     value: Math.round(value * 100) / 100,
     work: { ...opportunity.work },
     cycle: opportunity.cycle,
@@ -548,6 +550,7 @@ export function recordCrmVisit(
         value: visit.saleValue,
         date: visit.date,
         sellerTeamId: visit.userId,
+        requiresInstallation: visit.requiresInstallation,
       },
       actor,
       at,
@@ -854,6 +857,7 @@ export function businessSales(data) {
         source: contactOrigin(visit),
         date: visit.date,
         products: visit.sold,
+        requiresInstallation: visit.requiresInstallation === true,
         value: visit.saleValue,
         work: crmWorkSnapshot({ ...visit, name: visit.workName }, visit),
         registeredBy: person(visit.userId),

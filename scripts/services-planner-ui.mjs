@@ -1,0 +1,115 @@
+import assert from "node:assert/strict";
+import { chromium } from "playwright";
+import { dateLabel } from "../src/lib/domain.mjs";
+const browser = await chromium.launch({ executablePath: process.env.BROWSER_PATH || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
+const context = await browser.newContext({ viewport: { width: 1500, height: 1050 }, locale: "pt-BR" });
+const page = await context.newPage(), errors = [];
+page.setDefaultTimeout(12000); page.on("pageerror", (error) => errors.push(error.message));
+await context.route(/neon\.tech|supabase\./, (route) => route.abort());
+const button = (name) => page.getByRole("button", { name, exact: true });
+const nav = async (name) => {
+  if (await page.locator(".menu-toggle").isVisible()) await button("Abrir navegação").click();
+  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name, exact: true }).click();
+};
+const state = () => page.evaluate(async () => (await import("/src/lib/repository.mjs")).repository.load());
+try {
+  await page.goto("http://127.0.0.1:5174/"); await page.getByLabel("Colaborador na prévia").waitFor();
+  const dates = await page.evaluate(async () => {
+    const { cloudEnabled } = await import("/src/lib/auth.mjs"); if (cloudEnabled) throw Error("Somente contexto local descartável");
+    const { repository } = await import("/src/lib/repository.mjs"), { emptyData, newVisit, recordVisit, today } = await import("/src/lib/domain.mjs");
+    const { saveService, saveInstaller, newService, newAppointment } = await import("/src/lib/services.mjs"), { calendarDays } = await import("/src/lib/service-operations.mjs");
+    let data = saveInstaller(saveInstaller(emptyData(), { name: "Ana" }), { name: "Beto" });
+    for (const [name, period] of [["Tarde primeiro", "afternoon"], ["Manhã depois", "morning"], ["Obra destino", ""]]) {
+      const slots = period ? [{ ...newAppointment(today()), period, installerIds: [data.installers[0].id] }] : [];
+      data = saveService(data, { ...newService(), origin: "legacy", name, address: "Rua A", street: "Rua A", neighborhood: "Centro", city: "Sorriso", description: "Forro", appointments: slots }, "ADM");
+    }
+    for (const [name, user, amount, installation] of [["Venda com instalação", "claudionor", "100", true], ["Venda sem instalação", "charles", "200", false], ["Obra sem venda", "claudionor", "", false]]) {
+      data = recordVisit(data, { ...newVisit(user), workName: name, street: `Rua ${name}`, number: "1", neighborhood: "Centro", city: "Sorriso", state: "MT", offered: ["FORRO"], sold: amount ? ["FORRO"] : [], stage: amount ? "closing" : "prospecting", saleValue: amount, sellerId: user, requiresInstallation: installation });
+    }
+    await repository.save(data);
+    return { today: today(), target: calendarDays(today(), "week").find((day) => day !== today()) };
+  });
+  await page.reload(); await nav("CRM");
+  await page.getByLabel("Vendedor da oportunidade").selectOption("charles");
+  await page.locator(".crm-metrics").getByText(/200,00/).waitFor();
+  assert.ok((await page.getByRole("button", { name: /^Encerradas/ }).innerText()).includes("1"));
+  await nav("Serviços");
+  await page.locator(".service-waiting").waitFor();
+  assert.equal(await page.locator(".service-waiting-card", { hasText: "Venda com instalação" }).count(), 1);
+  assert.equal(await page.locator(".service-waiting-card", { hasText: "Venda sem instalação" }).count(), 0);
+  assert.equal(await page.locator(".services-day").count(), 6);
+  const day = page.getByRole("region", { name: `Serviços em ${dateLabel(dates.today)}` });
+  // section nomeada tem papel de região; ordem independe da criação dos serviços.
+  assert.deepEqual(await day.locator(".service-calendar-open > strong").allTextContents(), ["Manhã depois", "Tarde primeiro"]);
+  await page.mouse.move(1450, 80); await page.waitForTimeout(200);
+  await page.screenshot({ path: "test-results/services-planner-populated.png", fullPage: true });
+  const source = day.locator(".service-calendar-card", { hasText: "Tarde primeiro" });
+  const target = page.locator(`.service-period-lane[data-day="${dates.target}"][data-period="morning"]`);
+  await source.dragTo(target);
+  await target.locator(".service-calendar-card", { hasText: "Tarde primeiro" }).waitFor();
+  const afterMove = await state();
+  assert.equal(afterMove.services.find((row) => row.name === "Tarde primeiro").appointments.find((slot) => slot.state === "planned").date, dates.target);
+  await page.getByRole("button", { name: `Transferir equipe de Tarde primeiro em ${dateLabel(dates.target)}` }).click();
+  let modal = page.getByRole("dialog");
+  const destination = afterMove.services.find((row) => row.name === "Obra destino");
+  await modal.getByLabel("Obra de destino").selectOption(destination.id);
+  await modal.getByLabel("Motivo").fill("Prioridade de execução");
+  await modal.getByRole("button", { name: "Salvar alteração", exact: true }).click(); await modal.waitFor({ state: "hidden" });
+  await page.getByRole("button", { name: `Excluir compromisso de Obra destino em ${dateLabel(dates.target)}` }).click();
+  modal = page.getByRole("dialog");
+  await modal.getByLabel("Somente este compromisso", { exact: false }).check();
+  await modal.getByLabel("Motivo").fill("Reagendar depois");
+  await modal.getByRole("button", { name: "Confirmar exclusão" }).click(); await modal.waitFor({ state: "hidden" });
+  assert.equal((await state()).services.find((row) => row.id === destination.id).deleted, undefined);
+  await page.getByRole("button", { name: `Excluir compromisso de Manhã depois em ${dateLabel(dates.today)}` }).click();
+  modal = page.getByRole("dialog"); await modal.getByLabel("O serviço completo", { exact: false }).check();
+  await modal.getByLabel("Motivo").fill("Serviço duplicado"); await modal.getByRole("button", { name: "Confirmar exclusão" }).click(); await modal.waitFor({ state: "hidden" });
+  assert.equal((await state()).services.find((row) => row.name === "Manhã depois").deleted, true);
+  await button("Novo serviço").click();
+  modal = page.getByRole("dialog");
+  assert.equal(await modal.getByLabel("Venda de origem", { exact: false }).count(), 0);
+  const choices = await modal.getByLabel("Obra vendida").locator("option").allTextContents();
+  assert.ok(choices.some((name) => name.includes("Venda com instalação")));
+  assert.equal(choices.some((name) => name.includes("Obra sem venda")), false);
+  await modal.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await button("Serviço avulso").click(); modal = page.getByRole("dialog");
+  assert.equal(await modal.getByLabel("Obra vendida").count(), 0);
+  await modal.getByLabel("Cliente / obra").fill("Obra anterior ao sistema");
+  await modal.getByLabel("Rua / avenida").fill("Rua antiga"); await modal.getByLabel("Bairro").fill("Centro"); await modal.getByLabel("Cidade").fill("Sorriso");
+  await modal.getByLabel("Serviço a executar").fill("Instalar os materiais já vendidos");
+  assert.equal(await modal.getByLabel("Serviço a executar").evaluate((node) => Boolean(document.querySelector(".service-product-options").compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING)), true);
+  await modal.getByRole("button", { name: "Salvar serviço" }).click();
+  await page.locator(".service-detail-heading").waitFor(); await button("Fechar janela").click();
+  const financial = await page.evaluate(async () => (await import("/src/lib/crm.mjs")).businessSales(await (await import("/src/lib/repository.mjs")).repository.load()).reduce((sum, sale) => sum + Number(sale.value), 0));
+  assert.equal(financial, 300);
+  await button("Mês").click(); const monthDays = await page.locator(".services-day").count(); assert.ok(monthDays > 6);
+  await page.getByLabel("Mostrar domingo").check(); assert.ok(await page.locator(".services-day").count() > monthDays);
+  await page.getByLabel("Mostrar domingo").uncheck();
+  await page.mouse.move(1450, 80); await page.waitForTimeout(200);
+  await page.screenshot({ path: "test-results/services-planner-month.png", fullPage: true });
+  await button("Semana").click(); await page.screenshot({ path: "test-results/services-planner-week.png", fullPage: true });
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.mouse.move(350, 80);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.screenshot({ path: "test-results/services-planner-mobile.png", fullPage: true });
+  await page.reload(); await nav("Serviços");
+  await page.locator(".service-waiting").waitFor();
+  assert.equal(await page.locator(".service-calendar-card", { hasText: "Manhã depois" }).count(), 0);
+  await page.setViewportSize({ width: 1500, height: 1050 });
+  await nav("CRM");
+  await page.getByRole("button", { name: "Abrir oportunidade Obra sem venda", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Registrar venda", exact: true }).click();
+  modal = page.getByRole("dialog");
+  await modal.getByRole("checkbox", { name: "FORRO", exact: true }).check();
+  await modal.getByLabel("Valor deste fechamento (R$)").fill("50");
+  await modal.getByLabel("Esta venda precisa de instalação").check();
+  await modal.getByRole("button", { name: "Confirmar venda", exact: true }).click(); await modal.waitFor({ state: "hidden" });
+  await nav("Serviços"); await page.locator(".service-waiting-card", { hasText: "Obra sem venda" }).waitFor();
+  await page.locator(".service-waiting-card", { hasText: "Obra sem venda" }).getByRole("button", { name: "Distribuir equipe", exact: false }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Salvar serviço", exact: true }).click();
+  await page.locator(".service-detail-heading").waitFor();
+  assert.equal((await state()).services.filter((row) => row.name === "Obra sem venda").length, 1);
+  assert.deepEqual(errors, []);
+  console.log("PASS: fila seletiva, ordem de períodos, arraste, transferência, exclusão por compromisso/serviço, obras vendidas/avulsas, indicadores do CRM, mês, domingo e celular; financeiro preservado.");
+} catch (error) { await page.screenshot({ path: "test-results/services-planner-failure.png", fullPage: true }); throw error; }
+finally { await context.close(); await browser.close(); }

@@ -45,6 +45,19 @@ Os arquivos de origem, revisão, plano aplicado e recibo ficam em `test-results/
 
 `npm test` inclui testes de regras de Serviços. Com a prévia local na porta 5174, `npm run test:services` verifica cadastro de equipe, vínculo com venda, conflito, retorno, conclusão, fotos, persistência e financeiro sem duplicidade em computador e celular. O teste usa contexto descartável e bloqueia conexões ao Neon. Execute também `npm run test:ui` e `npm run build`.
 
+## Agenda e distribuição (04/11/2026)
+
+- Vendas no CRM e em visitas/leads possuem a opção **Esta venda precisa de instalação**. Cada fechamento marcado aparece automaticamente em **Aguardando**, apenas com seus produtos vendidos. A fila é derivada dos fechamentos e decisões existentes; não cria outra venda nem exige gerar serviços em leituras do banco. Uma venda já vinculada a qualquer serviço, inclusive excluído, não reaparece sozinha na fila.
+- Fechamentos antigos sem classificação ficam em **Vendas para instalação → Aguardando avaliação**. **Precisa de instalação** encaminha para a fila; **Sem instalação** dispensa. A distribuição preenche o formulário a partir da venda, preservando o vínculo sem exibir um seletor de venda de origem.
+- **Novo serviço** apresenta somente obras com venda. **Serviço avulso** permite cadastrar instalações vendidas antes do sistema, sem criar fechamento financeiro ou exigir cadastro de visita.
+- Calendário oferece dia, semana e mês; domingo fica oculto por padrão e pode ser mostrado. Períodos são apresentados como dia inteiro, manhã e tarde, com ordenação por horário. A primeira coluna contém a fila de distribuição. Arrastar permite trocar dia/período e ordenar cartões no período; no celular, ações de reagendar oferecem o mesmo fluxo com seleção de equipe.
+- Reagendamento, exclusão de compromisso e transferência podem afetar somente um dia de um agendamento extenso ou todo o período. As divisões mantêm histórico e os dias restantes. Transferências permitem escolher parte da equipe e mostram **Foi para outra obra** no dia original, além de registrar origem e destino.
+- Excluir permite escolher compromisso ou serviço completo. Serviços excluídos permanecem no estado como histórico, fora das listas operacionais; compromissos pendentes são retirados e o financeiro é preservado. Autoria vem da sessão e operações passam pela revisão e idempotência existentes.
+- Somente fotos são aceitas. Dados e fotos de serviços concluídos podem ser atualizados; novas execuções exigem registrar retorno antes de agendar.
+- Indicadores e contadores do CRM acompanham os filtros do quadro. O recorte por vendedor usa o responsável atual da oportunidade; o crédito financeiro nos relatórios continua com quem realizou cada venda.
+
+Verificação adicional: `node scripts/services-planner-ui.mjs` usa contexto local descartável para fila, arraste, transferência, exclusão, obras avulsas, filtros e celular. `scripts/services-neon-e2e.mjs` testa as operações reais exclusivamente em branch temporária `famac-e2e-*`.
+
 ## Persistência em produção
 
 Profissionais podem ser excluídos pela administração e por Túlio, mediante confirmação. A exclusão retira o cadastro da equipe e de novos agendamentos, preservando o nome nos serviços anteriores e nos filtros históricos. Agendamentos pendentes exigem reatribuição antes da exclusão. Não há botões de ativar/desativar.

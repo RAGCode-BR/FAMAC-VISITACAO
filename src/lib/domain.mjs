@@ -157,6 +157,7 @@ export const newVisit = (userId) => ({
 export const newLead = (userId) => ({ ...newVisit(userId), source: "lead" });
 
 export function validateVisit(visit, allowedProducts = PRODUCTS) {
+  if (visit.requiresInstallation !== undefined && typeof visit.requiresInstallation !== "boolean") throw new Error("Informe se a venda precisa de instalação.");
   if (visit.source !== undefined && !["visit", "lead"].includes(visit.source))
     throw new Error("Origem do registro inválida.");
   if (!visit.date || visit.date > today())

@@ -1,8 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { addressLabel, catalogProducts, dateLabel, normalize, person, today } from "../lib/domain.mjs";
-import { SERVICE_PERIODS, SERVICE_STATUSES, SERVICE_TYPES, changeServiceStatus, decideInstallation, deleteInstaller, newAppointment, newService, saleServiceDraft, saveInstaller, saveService, serviceCode, serviceSales, serviceWeek, shiftServiceDate } from "../lib/services.mjs";
+import { SERVICE_PERIODS, SERVICE_STATUSES, SERVICE_TYPES, changeServiceStatus, decideInstallation, deleteInstaller, newAppointment, newService, saleServiceDraft, saveInstaller, saveService, serviceCode, serviceSales } from "../lib/services.mjs";
 import { AddressFields, Badge, Empty, Field, Icon, Metric, Modal, Select } from "./ui.jsx";
 import ServiceDateField from "./ServiceDateField.jsx";
+import ServiceCalendar from "./ServiceCalendar.jsx";
+import ServiceOperationModal from "./ServiceOperationModal.jsx";
+import { installationQueue, needsInstallation, serviceActive, serviceScheduleAction } from "../lib/service-operations.mjs";
 import ServiceHistory from "./ServiceHistory.jsx";
 import Pagination from "./Pagination.jsx";
 import VisitPhoto from "./VisitPhoto.jsx";
@@ -11,7 +14,7 @@ import { cloudEnabled } from "../lib/auth.mjs";
 import "../services.css";
 
 const statusTone = (status) => status === "completed" ? "success" : ["cancelled", "return_required"].includes(status) ? "red" : "blue";
-const active = (item) => !["completed", "cancelled"].includes(item.status);
+const active = serviceActive;
 const periodLabel = (item) => item.period === "custom" ? `${item.startTime}–${item.endTime}` : SERVICE_PERIODS[item.period];
 const crew = (item, data) => item.installerIds.map((id) => data.installers?.find((row) => row.id === id)?.name || "Profissional").join(", ");
 const dateRange = (item) => `${dateLabel(item.date)}${item.endDate && item.endDate !== item.date ? ` a ${dateLabel(item.endDate)}` : ""}`;
@@ -19,18 +22,17 @@ const serviceFormDraft = (initial) => ({ ...newService(), ...structuredClone(ini
 
 export default function Services({ data, save, actor, seed }) {
   const [view, setView] = useState("agenda");
-  const [period, setPeriod] = useState("week");
-  const [date, setDate] = useState(today());
   const [query, setQuery] = useState("");
   const [installer, setInstaller] = useState("");
   const [status, setStatus] = useState("");
   const [editor, setEditor] = useState(null);
   const [detailId, setDetailId] = useState(null);
   const [action, setAction] = useState(null);
+  const [operation, setOperation] = useState(null);
   const [page, setPage] = useState(1);
   const [salesFilter, setSalesFilter] = useState("pending");
   const [error, setError] = useState("");
-  const services = data.services || [], sales = serviceSales(data);
+  const services = (data.services || []).filter((item) => !item.deleted), sales = serviceSales(data);
   useEffect(() => {
     if (!seed?.saleId) return;
     const sale = serviceSales(data).find((row) => row.id === seed.saleId);
@@ -40,29 +42,40 @@ export default function Services({ data, save, actor, seed }) {
   const filtered = services.filter((item) => (!status || item.status === status) &&
     (!installer || item.appointments.some((appt) => appt.installerIds.includes(installer))) &&
     normalize(`${serviceCode(item.number)} ${item.name} ${item.address} ${item.neighborhood} ${item.city} ${item.description} ${item.products.join(" ")}`).includes(normalize(query)));
-  const days = period === "day" ? [date] : serviceWeek(date);
-  const pending = filtered.filter((item) => active(item) && !item.appointments.some((appt) => appt.state === "planned"));
-  const pendingSales = sales.filter((sale) => !(data.serviceDecisions || {})[sale.id] || data.serviceDecisions[sale.id] === "pending");
+  const queue = installationQueue(data).filter((item) => (!installer || item.service && filtered.some((row) => row.id === item.service.id)) && (!status || item.service?.status === status || !item.service && status === "waiting") && normalize(`${item.name} ${item.products.join(" ")} ${item.service ? serviceCode(item.service.number) : ""} ${item.service?.description || ""} ${item.sale?.work.neighborhood || item.service?.neighborhood || ""} ${item.sale?.work.city || item.service?.city || ""}`).includes(normalize(query)));
+  const pendingSales = sales.filter((sale) => data.serviceDecisions?.[sale.id] === "pending" || !data.serviceDecisions?.[sale.id] && sale.requiresInstallation === undefined && !services.some((item) => item.saleId === sale.id));
   const visibleSales = sales.filter((sale) => salesFilter === "all" || pendingSales.some((row) => row.id === sale.id))
     .filter((sale) => normalize(`${sale.work.name} ${sale.work.neighborhood} ${sale.products.join(" ")}`).includes(normalize(query)))
     .sort((a, b) => b.date.localeCompare(a.date));
   const selected = services.find((row) => row.id === detailId);
   const openNew = () => { setDetailId(null); setEditor(newService()); };
+  const openLegacy = () => { setDetailId(null); setEditor({ ...newService(), origin: "legacy" }); };
+  const distribute = (item, day, period) => {
+    const draft = structuredClone(item.service || item.draft);
+    if (item.sale) draft.queueSaleId = item.sale.id;
+    if (day) draft.appointments.push({ ...newAppointment(day), period: period || "morning" });
+    setDetailId(null); setEditor(draft);
+  };
+  const move = async (request) => {
+    setError("");
+    try { await save((current) => serviceScheduleAction(current, request, actor), "Agenda atualizada.", request); }
+    catch (cause) { setError(cause.message); }
+  };
   const list = [...filtered].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const pageItems = view === "sales" ? visibleSales : list;
   const currentPage = Math.min(page, Math.max(1, Math.ceil(pageItems.length / 12)));
   const decision = async (saleId, value) => {
     setError("");
-    try { await save((current) => decideInstallation(current, saleId, value), value === "pending" ? "Venda devolvida para análise." : "Venda marcada sem instalação.", { type: "decision", saleId, decision: value }); }
+    try { await save((current) => decideInstallation(current, saleId, value), value === "pending" ? "Venda devolvida para análise." : value === "required" ? "Obra incluída em Aguardando." : "Venda marcada sem instalação.", { type: "decision", saleId, decision: value }); }
     catch (cause) { setError(cause.message); }
   };
   return <div className="services-page">
     <div className="services-intro">
       <div>{cloudEnabled ? <><span className="eyebrow">Pós-venda</span><p>Organize as instalações, a equipe e os retornos dos clientes.</p></> : <><span className="services-preview"><Icon name="info" size={15} />Prévia local</span><p>Agenda em avaliação. Registros salvos somente neste navegador.</p></>}</div>
-      <button className="button primary" onClick={openNew}><Icon name="plus" size={18} />Novo serviço</button>
+      <div className="button-row"><button className="button secondary" onClick={openLegacy}>Serviço avulso</button><button className="button primary" onClick={openNew}><Icon name="plus" size={18} />Novo serviço</button></div>
     </div>
     <div className="metrics services-metrics">
-      <Metric label="Aguardando agenda" value={services.filter((item) => item.status === "waiting").length} detail="Serviços ainda sem data" icon="calendar" />
+      <Metric label="Aguardando agenda" value={queue.length} detail="Serviços ainda sem data" icon="calendar" />
       <Metric label="Agendados" value={services.filter((item) => item.status === "scheduled").length} detail="Equipe e período definidos" icon="users" />
       <Metric label="Em execução" value={services.filter((item) => item.status === "in_progress").length} detail="Trabalhos em andamento" icon="building" />
       <Metric label="Retornos necessários" value={services.filter((item) => item.status === "return_required").length} detail="Pendências para acompanhar" icon="clock" accent />
@@ -79,42 +92,23 @@ export default function Services({ data, save, actor, seed }) {
         </>}
       </div>}
       {error && <p className="error" role="alert">{error}</p>}
-      {view === "agenda" && <>
-        <div className="services-calendar-controls">
-          <div className="tabs" role="group" aria-label="Período da agenda de serviços">{[["day", "Dia"], ["week", "Semana"]].map(([id, label]) => <button key={id} className={period === id ? "active" : ""} onClick={() => setPeriod(id)}>{label}</button>)}</div>
-          <div className="button-row"><button className="icon-button" aria-label="Período anterior da agenda" onClick={() => setDate(shiftServiceDate(date, period === "week" ? -7 : -1))}>‹</button><ServiceDateField label="Data da agenda" value={date} onChange={(next) => setDate(next || today())} /><button className="icon-button" aria-label="Próximo período da agenda" onClick={() => setDate(shiftServiceDate(date, period === "week" ? 7 : 1))}>›</button><button className="button secondary" onClick={() => setDate(today())}>Hoje</button></div>
-        </div>
-        <div className="services-calendar-scroll"><div className={`services-calendar ${period === "day" ? "single-day" : ""}`}>
-          {days.map((day) => {
-            const events = filtered.flatMap((service) => service.appointments.filter((appt) => appt.state !== "cancelled" && appt.date <= day && (appt.endDate || appt.date) >= day && (!installer || appt.installerIds.includes(installer))).map((appointment) => ({ service, appointment })));
-            return <section className={`services-day ${day === today() ? "is-today" : ""}`} key={day} aria-label={`Serviços em ${dateLabel(day)}`}>
-              <header><span>{new Date(`${day}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "short" })}</span><strong>{dateLabel(day).slice(0, 5)}</strong><small>{events.length} agendamentos</small></header>
-              <div className="services-day-items">{events.map(({ service, appointment }) => <button className={`service-calendar-card service-state-${service.status}`} key={`${service.id}-${appointment.id}`} onClick={() => setDetailId(service.id)}>
-                <span className="service-event-time"><Icon name="clock" size={13} />{periodLabel(appointment)}</span><small>{serviceCode(service.number)} · {service.type}</small><strong>{service.name}</strong><span>{service.description}</span><span className="service-event-crew"><Icon name="users" size={14} />{crew(appointment, data)}</span><Badge tone={statusTone(service.status)}>{appointment.state === "completed" ? "Etapa realizada" : SERVICE_STATUSES[service.status]}</Badge>
-              </button>)}{!events.length && <p className="services-day-empty">Sem agendamentos</p>}</div>
-            </section>;
-          })}
-        </div></div>
-        <section className="services-pending"><div className="panel-heading"><div><h2>Próximos serviços a organizar</h2><p>Serviços e retornos que ainda precisam de uma data.</p></div><Badge>{pending.length}</Badge></div>
-          {pending.length ? <div className="services-pending-grid">{pending.slice(0, 6).map((item) => <button className="service-pending-card" key={item.id} onClick={() => setDetailId(item.id)}><small>{serviceCode(item.number)}</small><strong>{item.name}</strong><span>{item.description}</span><Badge tone={statusTone(item.status)}>{SERVICE_STATUSES[item.status]}</Badge></button>)}</div> : <p className="muted">Nenhum serviço sem data nos filtros atuais.</p>}
-          {pending.length > 6 && <button className="button secondary" onClick={() => setView("list")}>Ver todos os serviços</button>}
-        </section>
-      </>}
+      {view === "agenda" && <ServiceCalendar services={filtered.map((item) => ({ ...item, appointments: item.appointments.filter((slot) => !installer || slot.installerIds.includes(installer)) }))} queue={queue} data={data} onOpen={setDetailId} onQueue={distribute} onOperation={setOperation} onMove={move} />}
       {view === "list" && (list.length ? <><div className="table-scroll"><table><thead><tr><th>Serviço / cliente</th><th>Produtos / local</th><th>Próximo agendamento</th><th>Situação</th><th>Ações</th></tr></thead><tbody>{list.slice((currentPage - 1) * 12, currentPage * 12).map((item) => {
         const next = item.appointments.filter((appt) => appt.state === "planned").sort((a, b) => a.date.localeCompare(b.date))[0];
         return <tr key={item.id}><td><button className="table-link" onClick={() => setDetailId(item.id)}>{item.name}</button><small>{serviceCode(item.number)} · {item.type}</small></td><td>{item.products.join(", ") || "Serviço sem produto vinculado"}<small>{item.neighborhood} · {item.city}</small></td><td>{next ? <>{dateRange(next)}<small>{periodLabel(next)} · {crew(next, data)}</small></> : "Sem agendamento pendente"}</td><td><Badge tone={statusTone(item.status)}>{SERVICE_STATUSES[item.status]}</Badge></td><td><button className="button secondary" onClick={() => setDetailId(item.id)}>Ver serviço</button></td></tr>;
-      })}</tbody></table></div><Pagination page={currentPage} totalItems={list.length} pageSize={12} onChange={setPage} itemLabel="serviços" /></> : <Empty title="Sua agenda começa com um serviço" description="Crie um serviço diretamente ou aproveite um fechamento do CRM." icon="calendar" action={<button className="button secondary" onClick={openNew}>Novo serviço</button>} />)}
+      })}</tbody></table></div><Pagination page={currentPage} totalItems={list.length} pageSize={12} onChange={setPage} itemLabel="serviços" /></> : <Empty title="Sua agenda começa com um serviço" description="Escolha uma obra vendida ou cadastre um serviço avulso." icon="calendar" action={<button className="button secondary" onClick={openNew}>Novo serviço</button>} />)}
       {view === "sales" && <div className="services-sales"><div className="panel-heading"><div><h2>Da venda à instalação</h2><p>Avalie cada fechamento. Uma venda pode ter vários serviços, sem duplicar seu valor no financeiro.</p></div></div>
         {visibleSales.length ? <><div className="table-scroll"><table><thead><tr><th>Venda / obra</th><th>Produtos / vendedor</th><th>Instalação</th><th>Ações</th></tr></thead><tbody>{visibleSales.slice((currentPage - 1) * 12, currentPage * 12).map((sale) => {
           const linked = services.filter((item) => item.saleId === sale.id);
-          return <tr key={sale.id}><td><strong>{sale.work.name}</strong><small>{dateLabel(sale.date)} · {sale.work.neighborhood}</small></td><td>{sale.products.join(", ")}<small>{person(sale.sellerTeamId)}</small></td><td>{linked.length ? `${linked.length} serviço(s) vinculado(s)` : data.serviceDecisions?.[sale.id] === "not_required" ? "Sem instalação" : "Aguardando avaliação"}</td><td><div className="button-row"><button className="button secondary" onClick={() => { setDetailId(null); setEditor(saleServiceDraft(sale)); }}>{linked.length ? "Novo serviço da venda" : "Gerar serviço"}</button>{!linked.some(active) && <button className="button text-button" onClick={() => decision(sale.id, data.serviceDecisions?.[sale.id] === "not_required" ? "pending" : "not_required")}>{data.serviceDecisions?.[sale.id] === "not_required" ? "Reavaliar" : "Sem instalação"}</button>}</div></td></tr>;
+          return <tr key={sale.id}><td><strong>{sale.work.name}</strong><small>{dateLabel(sale.date)} · {sale.work.neighborhood}</small></td><td>{sale.products.join(", ")}<small>{person(sale.sellerTeamId)}</small></td><td>{linked.length ? `${linked.length} serviço(s) vinculado(s)` : needsInstallation(data, sale) ? "Aguardando distribuição" : data.serviceDecisions?.[sale.id] === "not_required" || sale.requiresInstallation === false ? "Sem instalação" : "Aguardando avaliação"}</td><td><div className="button-row"><button className="button secondary" onClick={() => { setDetailId(null); setEditor(saleServiceDraft(sale)); }}>{linked.length ? "Novo serviço da venda" : "Gerar serviço"}</button>{!linked.length && !needsInstallation(data, sale) && <button className="button secondary" onClick={() => decision(sale.id, "required")}>Precisa de instalação</button>}{!linked.some(active) && <button className="button text-button" onClick={() => decision(sale.id, data.serviceDecisions?.[sale.id] === "not_required" ? "pending" : "not_required")}>{data.serviceDecisions?.[sale.id] === "not_required" ? "Reavaliar" : "Sem instalação"}</button>}</div></td></tr>;
         })}</tbody></table></div><Pagination page={currentPage} totalItems={visibleSales.length} pageSize={12} onChange={setPage} itemLabel="vendas para instalação" /></> : <Empty title={salesFilter === "pending" ? "Nenhuma venda aguardando avaliação" : "Nenhuma venda encontrada"} description="Os fechamentos registrados no CRM e nas visitas aparecerão aqui para avaliar a instalação." icon="trend" />}
       </div>}
       {view === "team" && <InstallerManager data={data} save={save} />}
       {view === "history" && <ServiceHistory data={data} />}
     </section>
     {editor && <ServiceForm key={editor.id || editor.saleId || "new"} initial={editor} data={data} save={save} actor={actor} onClose={() => setEditor(null)} onSaved={(record) => { setEditor(null); setDetailId(record.id); }} />}
-    {selected && !editor && !action && <ServiceDetail item={selected} data={data} onClose={() => setDetailId(null)} onEdit={() => setEditor(structuredClone(selected))} onAction={(status) => setAction({ id: selected.id, status })} />}
+    {selected && !editor && !action && !operation && <ServiceDetail item={selected} data={data} onClose={() => setDetailId(null)} onEdit={() => setEditor(structuredClone(selected))} onAction={(status) => setAction({ id: selected.id, status })} onDelete={() => setOperation({ type: "delete", id: selected.id })} onOperation={setOperation} />}
+    {operation && <ServiceOperationModal operation={operation} data={data} save={save} actor={actor} onClose={() => { setOperation(null); if (!data.services.some((item) => item.id === detailId && !item.deleted)) setDetailId(null); }} />}
     {action && <ServiceAction item={services.find((item) => item.id === action.id)} status={action.status} actor={actor} save={save} onClose={() => setAction(null)} />}
   </div>;
 }
@@ -168,22 +162,24 @@ function ServiceForm({ initial, data, save, actor, onClose, onSaved }) {
   };
   const submit = async (event) => {
     event.preventDefault(); setError(""); setBusy(true);
+    if (!form.id && initial.origin !== "legacy" && !form.saleId) { setBusy(false); return setError("Escolha uma obra vendida ou use Serviço avulso para vendas anteriores ao sistema."); }
     try { const next = await save((current) => saveService(current, form, actor), "Serviço salvo na agenda.", { type: "save", draft: form }); onSaved(next.services.find((row) => row.id === form.id) || next.services.at(-1)); }
     catch (cause) { setError(cause.message); } finally { setBusy(false); }
   };
   const productOptions = [...new Set([...(selectedSale?.products || catalogProducts(data).map((row) => row.name)), ...form.products])];
-  return <Modal title={form.id ? `Editar ${serviceCode(form.number)}` : "Novo serviço"} onClose={close} wide><form className="service-form" onSubmit={submit}>
+  return <Modal title={form.id ? `Editar ${serviceCode(form.number)}` : initial.origin === "legacy" ? "Serviço avulso" : "Novo serviço"} onClose={close} wide><form className="service-form" onSubmit={submit}>
     <section><h3>Cliente e serviço</h3>
-      <Select label="Venda de origem (opcional)" value={form.saleId} disabled={!!form.id} onChange={(id) => { if (form.name && !window.confirm("Trocar a origem e preencher os dados da venda selecionada?")) return; const sale = sales.find((row) => row.id === id); setForm(serviceFormDraft(sale ? saleServiceDraft(sale) : newService())); }}><option value="">Serviço direto / venda anterior</option>{sales.map((sale) => <option key={sale.id} value={sale.id}>{sale.work.name} · {dateLabel(sale.date)} · {sale.products.join(", ")}</option>)}</Select>
+      {!form.id && initial.origin !== "legacy" && <Select label="Obra vendida" value={form.saleId} required onChange={(id) => { const sale = sales.find((row) => row.id === id); setForm(serviceFormDraft(sale ? saleServiceDraft(sale) : newService())); }}><option value="">Selecione uma obra com venda</option>{sales.map((sale) => <option key={sale.id} value={sale.id}>{sale.work.name} · {dateLabel(sale.date)} · {sale.products.join(", ")}</option>)}</Select>}
+      {initial.origin === "legacy" && <p className="inline-note">Para instalações de obras vendidas antes do sistema. Este cadastro não registra uma nova venda.</p>}
       {selectedSale && <p className="service-linked-sale"><Icon name="check" size={16} />Vinculado à venda de {dateLabel(selectedSale.date)} · {person(selectedSale.sellerTeamId)}. Este serviço não cria uma nova venda.</p>}
-      {!form.saleId && !form.id && data.works.length > 0 && <Select label="Preencher com uma obra cadastrada" value={form.workId || ""} onChange={(id) => { const work = data.works.find((row) => row.id === id); if (work) update({ workId: id, name: work.name, address: addressLabel(work), ...Object.fromEntries(["cep", "street", "complement", "state"].map((key) => [key, work[key] || ""])), addressNumber: work.number || "", neighborhood: work.neighborhood, city: work.city, contact: work.responsible || "", phone: work.phone || "" }); }}><option value="">Escolha uma obra ou preencha abaixo</option>{data.works.filter((row) => !row.deleted).map((row) => <option value={row.id} key={row.id}>{row.name} · {row.neighborhood}</option>)}</Select>}
       <div className="fields two"><Field label="Cliente / obra" value={form.name} onChange={change("name")} maxLength={400} required /><Select label="Tipo do serviço" value={form.type} onChange={(type) => update({ type })}>{SERVICE_TYPES.map((type) => <option key={type}>{type}</option>)}</Select></div>
-      <Field label="Serviço a executar" value={form.description} onChange={change("description")} maxLength={4000} placeholder="Ex.: instalar forro na sala e no corredor" required />
       <AddressFields value={{ ...form, number: form.addressNumber || "" }} requireState={false} onChange={({ number: addressNumber, ...next }) => update({ ...next, addressNumber, address: [next.street, addressNumber, next.complement].filter(Boolean).join(", ") })} />
       <div className="fields two"><Field label="Contato na obra" value={form.contact} onChange={change("contact")} maxLength={400} /><Field label="Telefone do contato" value={form.phone} onChange={change("phone")} type="tel" maxLength={25} /></div>
       <fieldset className="service-product-options"><legend>Produtos envolvidos</legend>{productOptions.map((name) => <label key={name}><input type="checkbox" checked={form.products.includes(name)} onChange={(event) => update({ products: event.target.checked ? [...form.products, name] : form.products.filter((row) => row !== name) })} />{name}</label>)}</fieldset>
+      <Field label="Serviço a executar" value={form.description} onChange={change("description")} maxLength={4000} placeholder="Ex.: instalar forro na sala e no corredor" required />
     </section>
-    <section><div className="service-form-heading"><div><h3>Agenda e equipe</h3><p>O serviço pode ter vários dias e mais de um profissional.</p></div><button type="button" className="button secondary" onClick={() => update({ appointments: [...form.appointments, newAppointment(today())] })}><Icon name="plus" size={16} />Adicionar agendamento</button></div>
+    <section><div className="service-form-heading"><div><h3>Agenda e equipe</h3><p>O serviço pode ter vários dias e mais de um profissional.</p></div><button type="button" className="button secondary" disabled={form.status === "completed"} onClick={() => update({ appointments: [...form.appointments, newAppointment(today())] })}><Icon name="plus" size={16} />Adicionar agendamento</button></div>
+      {form.status === "completed" && <p className="inline-note">Você pode atualizar os dados e as fotos. Para agendar uma nova execução, registre um retorno no serviço.</p>}
       {!planned.length && <p className="inline-note">Sem data definida, o serviço ficará aguardando agendamento.</p>}
       {planned.map((item, index) => <fieldset className="service-appointment-form" key={item.id}><legend>Agendamento {index + 1}</legend>
         <div className="fields two"><ServiceDateField label="Data inicial" value={item.date} required onChange={(next) => appointment(item.id, { date: next, endDate: item.endDate < next ? next : item.endDate })} /><ServiceDateField label="Data final" value={item.endDate} min={item.date} required onChange={(next) => appointment(item.id, { endDate: next })} /></div>
@@ -193,7 +189,7 @@ function ServiceForm({ initial, data, save, actor, onClose, onSaved }) {
         <button type="button" className="button text-button" onClick={() => update({ appointments: form.appointments.filter((row) => row.id !== item.id) })}><Icon name="trash" size={15} />Remover agendamento</button>
       </fieldset>)}
       <div className="service-inline-installer"><Field label="Novo profissional da equipe" value={installerName} onChange={(event) => setInstallerName(event.target.value)} placeholder="Nome do instalador" maxLength={180} /><button type="button" className="button secondary" onClick={addInstaller} disabled={!installerName.trim()}>Cadastrar profissional</button></div>
-      {!!historical.length && <details><summary>Agendamentos anteriores ({historical.length})</summary>{historical.map((item) => <p key={item.id}>{dateRange(item)} · {periodLabel(item)} · {crew(item, data)} · {item.state === "completed" ? "Realizado" : "Cancelado"}</p>)}</details>}
+      {!!historical.filter((item) => item.state !== "superseded").length && <details><summary>Agendamentos anteriores ({historical.length})</summary>{historical.filter((item) => item.state !== "superseded").map((item) => <p key={item.id}>{dateRange(item)} · {periodLabel(item)} · {crew(item, data)} · {item.state === "completed" ? "Realizado" : item.state === "transferred" ? "Foi para outra obra" : "Retirado"}</p>)}</details>}
     </section>
     <section><h3>Orientações e fotos</h3><Field label="Observações para a execução"><textarea value={form.notes} onChange={change("notes")} maxLength={4000} rows={3} placeholder="Acesso à obra, cuidados, materiais e pendências…" /></Field>
       <button type="button" className="button secondary" disabled={photoBusy} onClick={() => cameraRef.current.click()}><Icon name="camera" size={17} />Tirar foto</button><input hidden ref={cameraRef} aria-label="Fotografar serviço" type="file" accept="image/*" capture="environment" onChange={upload} />
@@ -205,7 +201,7 @@ function ServiceForm({ initial, data, save, actor, onClose, onSaved }) {
   </form></Modal>;
 }
 
-function ServiceDetail({ item, data, onClose, onEdit, onAction }) {
+function ServiceDetail({ item, data, onClose, onEdit, onAction, onDelete, onOperation }) {
   const sale = serviceSales(data).find((row) => row.id === item.saleId);
   return <Modal title={`${serviceCode(item.number)} · ${item.name}`} onClose={onClose} wide>
     <div className="service-detail-heading"><Badge tone={statusTone(item.status)}>{SERVICE_STATUSES[item.status]}</Badge><span>{item.type}</span></div>
@@ -214,8 +210,8 @@ function ServiceDetail({ item, data, onClose, onEdit, onAction }) {
     {item.contact && <p>Contato: <strong>{item.contact}</strong>{item.phone && <> · <a href={`tel:${item.phone.replace(/\D/g, "")}`}>{item.phone}</a></>}</p>}
     {item.saleId && <p className="service-linked-sale"><Icon name="check" size={16} />Venda vinculada de {sale ? dateLabel(sale.date) : "histórico preservado"}{sale ? ` · ${person(sale.sellerTeamId)}` : ""}</p>}
     <div className="tag-list">{item.products.map((name) => <Badge key={name}>{name}</Badge>)}</div>
-    <div className="service-detail-actions">{active(item) && <button className="button secondary" onClick={onEdit}><Icon name="edit" size={16} />Editar / agendar</button>}{item.status === "scheduled" && <button className="button primary" onClick={() => onAction("in_progress")}>Iniciar execução</button>}{["scheduled", "in_progress", "return_required"].includes(item.status) && <button className="button secondary" onClick={() => onAction("completed")}>Concluir serviço</button>}{["scheduled", "in_progress", "completed"].includes(item.status) && <button className="button secondary" onClick={() => onAction("return_required")}>Registrar retorno</button>}{active(item) && <button className="button secondary" onClick={() => onAction("cancelled")}>Cancelar serviço</button>}{item.status === "cancelled" && <button className="button secondary" onClick={() => onAction("waiting")}>Reabrir serviço</button>}</div>
-    <section className="service-detail-section"><h3>Agendamentos</h3>{item.appointments.length ? item.appointments.map((appt) => <article className="service-detail-appointment" key={appt.id}><Icon name="calendar" size={19} /><div><strong>{dateRange(appt)}</strong><p>{periodLabel(appt)}</p><small>{crew(appt, data)}</small></div><Badge tone={appt.state === "completed" ? "success" : appt.state === "cancelled" ? "red" : "blue"}>{appt.state === "completed" ? "Realizado" : appt.state === "cancelled" ? "Cancelado" : "Previsto"}</Badge></article>) : <p className="muted">Data e equipe ainda não definidas.</p>}</section>
+    <div className="service-detail-actions">{item.status !== "cancelled" && <button className="button secondary" onClick={onEdit}><Icon name="edit" size={16} />Editar / agendar</button>}{item.status === "scheduled" && <button className="button primary" onClick={() => onAction("in_progress")}>Iniciar execução</button>}{["scheduled", "in_progress", "return_required"].includes(item.status) && <button className="button secondary" onClick={() => onAction("completed")}>Concluir serviço</button>}{["scheduled", "in_progress", "completed"].includes(item.status) && <button className="button secondary" onClick={() => onAction("return_required")}>Registrar retorno</button>}{active(item) && <button className="button secondary" onClick={() => onAction("cancelled")}>Cancelar serviço</button>}{item.status === "cancelled" && <button className="button secondary" onClick={() => onAction("waiting")}>Reabrir serviço</button>}<button className="button secondary" onClick={onDelete}><Icon name="trash" size={16} />Excluir</button></div>
+    <section className="service-detail-section"><h3>Agendamentos</h3>{item.appointments.length ? item.appointments.filter((appt) => appt.state !== "superseded").map((appt) => <article className="service-detail-appointment" key={appt.id}><Icon name="calendar" size={19} /><div><strong>{dateRange(appt)}</strong><p>{periodLabel(appt)}</p><small>{crew(appt, data)}</small></div><Badge tone={appt.state === "completed" ? "success" : appt.state === "cancelled" ? "red" : "blue"}>{appt.state === "completed" ? "Realizado" : appt.state === "cancelled" ? "Retirado" : appt.state === "transferred" ? "Foi para outra obra" : "Previsto"}</Badge>{appt.state === "planned" && <div className="service-card-actions"><button className="icon-button" title="Reagendar" aria-label={`Reagendar compromisso de ${dateLabel(appt.date)}`} onClick={() => onOperation({ type: "move", id: item.id, appointmentId: appt.id, day: appt.date })}><Icon name="calendar" size={16} /></button><button className="icon-button" title="Foi para outra obra" aria-label={`Transferir equipe em ${dateLabel(appt.date)}`} onClick={() => onOperation({ type: "transfer", id: item.id, appointmentId: appt.id, day: appt.date })}><Icon name="arrow" size={16} /></button><button className="icon-button" aria-label={`Excluir compromisso de ${dateLabel(appt.date)}`} onClick={() => onOperation({ type: "delete", id: item.id, appointmentId: appt.id, day: appt.date })}><Icon name="trash" size={16} /></button></div>}</article>) : <p className="muted">Data e equipe ainda não definidas.</p>}</section>
     {item.notes && <section className="service-detail-section"><h3>Orientações e observações</h3><p className="pre-line">{item.notes}</p></section>}
     {!!item.photos.length && <section className="service-detail-section"><h3>Fotos do serviço</h3><div className="detail-photos">{item.photos.map((photo) => <VisitPhoto key={photo.id} photo={photo} alt={photo.name} />)}</div></section>}
     <section className="service-detail-section"><h3>Histórico do serviço</h3><ol className="service-history">{[...item.history].reverse().map((entry) => <li key={entry.id}><strong>{entry.note}</strong><small>{entry.actor} · {new Date(entry.at).toLocaleString("pt-BR")}</small></li>)}</ol></section>

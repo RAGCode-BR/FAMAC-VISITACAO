@@ -95,6 +95,8 @@ export default function Crm({
         ].join(" "),
       ).includes(normalize(query)),
   );
+  const filteredIds = new Set(filtered.map((item) => item.id));
+  const matchingSales = query || responsible || origin || returns ? crm.sales.filter((sale) => filteredIds.has(sale.opportunityId)) : crm.sales;
   const archived = filtered
     .filter(
       (item) => !active(item) && (!closedStage || item.stage === closedStage),
@@ -177,14 +179,14 @@ export default function Crm({
       <div className="metrics crm-metrics">
         <Metric
           label="Oportunidades abertas"
-          value={crm.opportunities.filter((item) => !item.deleted && active(item)).length}
+          value={filtered.filter(active).length}
           detail="Obras em acompanhamento"
           icon="building"
         />
         <Metric
           label="Em negociação"
           value={
-            crm.opportunities.filter((item) => !item.deleted && active(item) &&
+            filtered.filter((item) => active(item) &&
               (item.stage === "negotiating" || item.completedProducts.length))
               .length
           }
@@ -193,16 +195,16 @@ export default function Crm({
         />
         <Metric
           label="Retornos em atraso"
-          value={crm.opportunities.filter((item) => !item.deleted && overdue(item)).length}
+          value={filtered.filter(overdue).length}
           detail="Próximas ações que precisam de atenção"
           icon="clock"
         />
         <Metric
           label="Vendas no CRM"
           value={money(
-            crm.sales.reduce((total, sale) => total + sale.value, 0),
+            matchingSales.reduce((total, sale) => total + sale.value, 0),
           )}
-          detail={`${crm.sales.length} fechamentos, incluindo os das visitas`}
+          detail={`${matchingSales.length} fechamentos das oportunidades exibidas`}
           icon="chart"
           accent
         />
@@ -218,7 +220,7 @@ export default function Crm({
             onClick={() => showView("board")}
           >
             <Icon name="kanban" size={17} /> Em andamento
-            <span>{crm.opportunities.filter((item) => !item.deleted && active(item)).length}</span>
+            <span>{filtered.filter(active).length}</span>
           </button>
           <button
             aria-pressed={view === "closed"}
@@ -226,7 +228,7 @@ export default function Crm({
           >
             <Icon name="check" size={17} /> Encerradas
             <span>
-              {crm.opportunities.filter((item) => !item.deleted && !active(item)).length}
+              {filtered.filter((item) => !active(item)).length}
             </span>
           </button>
         </div>
@@ -918,6 +920,7 @@ function CrmDialog({
   const [value, setValue] = useState("");
   const [date, setDate] = useState(today());
   const [seller, setSeller] = useState(actorId);
+  const [requiresInstallation, setRequiresInstallation] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const type = initial.type;
@@ -949,6 +952,7 @@ function CrmDialog({
         value,
         date,
         sellerTeamId: seller,
+        requiresInstallation,
       });
       onClose();
     } catch (cause) {
@@ -1218,6 +1222,7 @@ function CrmDialog({
                   onChange={(event) => setDate(event.target.value)}
                 />
               </div>
+              <label className="inline-note"><input type="checkbox" checked={requiresInstallation} onChange={(event) => setRequiresInstallation(event.target.checked)} /> Esta venda precisa de instalação</label>
               <Select
                 label="Quem realizou a venda"
                 value={seller}

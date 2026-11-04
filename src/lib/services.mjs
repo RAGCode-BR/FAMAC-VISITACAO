@@ -10,7 +10,7 @@ export const SERVICE_PERIODS = { morning: "Manhã · 08h–12h", afternoon: "Tar
 export const serviceCode = (number) => `SV-${String(number).padStart(4, "0")}`;
 const fail = (condition, message) => { if (!condition) throw new Error(message); };
 const validDate = (value) => { const date = new Date(`${value}T12:00:00Z`); return /^\d{4}-\d{2}-\d{2}$/.test(value || "") && Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value; };
-const active = (item) => !["completed", "cancelled"].includes(item.status);
+const active = (item) => !item.deleted && !["completed", "cancelled"].includes(item.status);
 const lastServiceNumber = (data) => Math.max(0, ...(data.services || []).map((row) => Number.isSafeInteger(Number(row.number)) && Number(row.number) > 0 ? Number(row.number) : 0));
 export const formatServiceDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value || "") ? `${value.slice(8, 10)}/${value.slice(5, 7)}/${value.slice(0, 4)}` : "";
 export function parseServiceDate(value) {
@@ -82,8 +82,8 @@ function scheduleSummary(appointments, data) {
 }
 export function saveService(data, draft, actor, at = new Date().toISOString()) {
   const previous = (data.services || []).find((row) => row.id === draft.id);
-  fail(!draft.id || previous, "Serviço não encontrado.");
-  fail(!previous || active(previous), "Reabra o serviço antes de editar seus dados.");
+  fail(!draft.id || previous && !previous.deleted, "Serviço não encontrado.");
+  fail(previous?.status !== "cancelled", "Reabra o serviço antes de editar seus dados.");
   const fields = ["name", "address", "neighborhood", "city", "description"];
   for (const field of fields) fail(typeof draft[field] === "string" && draft[field].trim(), "Preencha cliente/obra, endereço, bairro, cidade e descrição do serviço.");
   fail(SERVICE_TYPES.includes(draft.type), "Selecione o tipo do serviço.");
@@ -95,6 +95,9 @@ export function saveService(data, draft, actor, at = new Date().toISOString()) {
   fail(Array.isArray(draft.products) && draft.products.every((name) => typeof name === "string" && name.length <= 180), "Produtos inválidos.");
   fail(Array.isArray(draft.photos) && draft.photos.length <= 6 && new Set(draft.photos.map((photo) => photo.id)).size === draft.photos.length && draft.photos.every((photo) => photo.id && (/^data:image\/(jpeg|png|webp);base64,/.test(photo.url || "") || photo.scope === "service" && typeof photo.key === "string" && photo.key.startsWith("servicos/") && photo.url === undefined)), "Adicione no máximo seis fotos válidas.");
   const sale = draft.saleId ? serviceSales(data).find((row) => row.id === draft.saleId) : null;
+  if (!previous && draft.queueSaleId) {
+    fail(draft.queueSaleId === draft.saleId && !(data.services || []).some((row) => row.saleId === draft.queueSaleId), "Esta venda já foi distribuída. Abra o serviço existente na agenda.");
+  }
   fail(!draft.saleId || sale, "Venda indisponível para vincular ao serviço.");
   fail(!previous || previous.saleId === (draft.saleId || ""), "Preserve a venda vinculada a este serviço.");
   fail(!sale || draft.products.every((name) => sale.products.includes(name)), "Selecione apenas produtos do fechamento vinculado.");
@@ -103,7 +106,8 @@ export function saveService(data, draft, actor, at = new Date().toISOString()) {
   const retained = (previous?.appointments || []).filter((item) => item.state !== "planned");
   const removed = (previous?.appointments || []).filter((item) => item.state === "planned" && !planned.some((row) => row.id === item.id)).map((item) => ({ ...item, state: "cancelled" }));
   const changedSchedule = JSON.stringify(previous?.appointments.filter((item) => item.state === "planned") || []) !== JSON.stringify(planned);
-  const status = planned.length ? previous?.status === "in_progress" ? "in_progress" : "scheduled" : previous?.status === "return_required" ? "return_required" : "waiting";
+  fail(previous?.status !== "completed" || !changedSchedule, "Reabra o serviço antes de alterar seus agendamentos.");
+  const status = previous?.status === "completed" ? "completed" : planned.length ? previous?.status === "in_progress" ? "in_progress" : "scheduled" : previous?.status === "return_required" ? "return_required" : "waiting";
   const record = {
     id: previous?.id || uid(), number: Number(previous?.number) > 0 && Number.isSafeInteger(Number(previous.number)) ? Number(previous.number) : Math.max(data.nextInstallationNumber || 1, 1 + lastServiceNumber(data)),
     ...Object.fromEntries([...fields, "contact", "phone", "notes"].map((field) => [field, draft[field].trim()])),
@@ -111,6 +115,7 @@ export function saveService(data, draft, actor, at = new Date().toISOString()) {
     address: draft.street ? [draft.street, draft.addressNumber, draft.complement].map((value) => value?.trim()).filter(Boolean).join(", ") : draft.address.trim(),
     type: draft.type, products: [...new Set(draft.products)], photos: [...draft.photos],
     saleId: sale?.id || "", opportunityId: sale?.opportunityId || "", sellerId: sale?.sellerTeamId || "",
+    origin: previous?.origin || (sale ? "sale" : draft.origin === "legacy" ? "legacy" : "direct"),
     appointments: [...retained, ...removed, ...planned], status,
     createdAt: previous?.createdAt || at, updatedAt: at,
     history: [...(previous?.history || []), event(previous ? "edited" : "created", actor, previous ? "Dados do serviço atualizados." : `Serviço criado${sale ? " a partir de uma venda" : " diretamente"}.`, at),
@@ -121,7 +126,7 @@ export function saveService(data, draft, actor, at = new Date().toISOString()) {
 }
 export function changeServiceStatus(data, id, status, reason, actor, at = new Date().toISOString()) {
   const item = (data.services || []).find((row) => row.id === id);
-  fail(item && Object.hasOwn(SERVICE_STATUSES, status), "Serviço ou situação inválida.");
+  fail(item && !item.deleted && Object.hasOwn(SERVICE_STATUSES, status), "Serviço ou situação inválida.");
   const transitions = { waiting: ["cancelled"], scheduled: ["in_progress", "completed", "return_required", "cancelled"], in_progress: ["completed", "return_required", "cancelled"], return_required: ["completed", "cancelled"], completed: ["return_required"], cancelled: ["waiting"] };
   fail(transitions[item.status]?.includes(status), "Esta mudança não está disponível para a situação atual.");
   fail(!["return_required", "cancelled"].includes(status) || reason?.trim(), "Informe o motivo do retorno ou cancelamento.");
@@ -150,7 +155,7 @@ export function deleteInstaller(data, id) {
   return { ...data, installers: data.installers.map((row) => row.id === id ? { ...row, deleted: true, inactive: true } : row) };
 }
 export function decideInstallation(data, saleId, decision) {
-  fail(serviceSales(data).some((row) => row.id === saleId) && ["not_required", "pending"].includes(decision), "Venda ou decisão inválida.");
+  fail(serviceSales(data).some((row) => row.id === saleId) && ["required", "not_required", "pending"].includes(decision), "Venda ou decisão inválida.");
   fail(decision !== "not_required" || !(data.services || []).some((row) => row.saleId === saleId && active(row)), "Esta venda possui um serviço ativo. Confira-o antes de dispensar a instalação.");
   return { ...data, serviceDecisions: { ...(data.serviceDecisions || {}), [saleId]: decision } };
 }

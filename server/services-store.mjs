@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { canAccessServices } from "../src/lib/service-access.mjs";
 import { saveService, saveInstaller, deleteInstaller, changeServiceStatus, decideInstallation } from "../src/lib/services.mjs";
 import { fail, validId } from "./policy.mjs";
+import { serviceScheduleAction } from "../src/lib/service-operations.mjs";
 
 export function requireServices(member) {
   if (!canAccessServices(member)) fail("Serviços está disponível somente para o administrador e Túlio.", 403);
@@ -23,6 +24,10 @@ export function applyServiceAction(state, action, member) {
     }
     if (action?.type === "status") return changeServiceStatus(state, action.id, action.status, action.reason, member.name);
     if (action?.type === "decision") return decideInstallation(state, action.saleId, action.decision);
+    if (["moveAppointment", "cancelAppointment", "transferAppointment", "deleteService"].includes(action?.type)) {
+      if (!validId(action.id) || action.appointmentId && !validId(action.appointmentId) || action.targetId && !validId(action.targetId)) fail("Compromisso inválido.");
+      return serviceScheduleAction(state, action, member.name);
+    }
   } catch (error) { fail(error.message); }
   fail("Ação de serviço inválida.");
 }

@@ -10,7 +10,7 @@
     "start": "npm run dev",
     "build": "vite build && node scripts/check-client-secrets.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 4174 --strictPort",
-    "test": "node --test scripts/domain.test.mjs scripts/policy.test.mjs scripts/architect-import.test.mjs scripts/reporting.test.mjs scripts/crm.test.mjs scripts/services.test.mjs scripts/service-history.test.mjs scripts/services-server.test.mjs",
+    "test": "node --test scripts/domain.test.mjs scripts/policy.test.mjs scripts/architect-import.test.mjs scripts/reporting.test.mjs scripts/crm.test.mjs scripts/services.test.mjs scripts/service-history.test.mjs scripts/services-server.test.mjs scripts/service-operations.test.mjs",
     "db:migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "neon:client-env": "node scripts/neon-client-env.mjs",
     "test:ui": "node scripts/smoke.mjs",
