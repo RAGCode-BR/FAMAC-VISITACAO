@@ -67,7 +67,7 @@ export default function ServiceCalendar({ services, queue, data, onOpen, onQueue
                     <button className="icon-button" aria-label={`Excluir compromisso de ${service.name} em ${dateLabel(day)}`} title="Excluir" onClick={() => onOperation({ type: "delete", id: service.id, appointmentId: appointment.id, day })}><Icon name="trash" size={15} /></button>
                   </div>}
                 </article>)}
-                {!slots.length && <span className="service-lane-empty">{dragging ? "Solte para agendar" : "Livre"}</span>}
+                {!slots.length && <span className="service-lane-empty">{dragging ? "Solte para agendar" : part === "full" ? "Sem agendamento de dia inteiro" : part === "morning" ? "Sem agendamentos pela manhã" : "Sem agendamentos à tarde"}</span>}
               </div>;
             })}
           </section>;
