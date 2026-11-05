@@ -7,9 +7,21 @@ import {
   validateRecord,
   requireCatalogAdmin,
   requireCatalogChange,
+  canReceiveSellerAssignment,
 } from "../server/policy.mjs";
 import { pinIdentity } from "../src/lib/identity.mjs";
 import { DEFAULT_PRODUCTS, emptyData, newVisit } from "../src/lib/domain.mjs";
+
+test("Túlio pode receber obras como vendedor sem perder o papel de supervisor", () => {
+  const tulio = { teamId: "tulio", role: "supervisor", active: true };
+  assert.equal(canReceiveSellerAssignment(tulio), true);
+  assert.equal(tulio.role, "supervisor");
+  assert.equal(canReceiveSellerAssignment({ teamId: "charles", role: "collaborator", active: true }), true);
+  assert.equal(canReceiveSellerAssignment({ ...tulio, active: false }), false);
+  assert.equal(canReceiveSellerAssignment({ ...tulio, teamId: "charles" }), false);
+  assert.equal(canReceiveSellerAssignment({ teamId: null, role: "admin", active: true }), false);
+  assert.equal(canReceiveSellerAssignment(undefined), false);
+});
 
 test("PIN de um dígito preserva as contas existentes e aceita o zero", () => {
   assert.equal(pinIdentity("0"), "pin-900001@login.famac.invalid");

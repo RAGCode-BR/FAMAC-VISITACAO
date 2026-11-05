@@ -10,6 +10,10 @@ import { isSharedContact } from "../src/lib/contacts.mjs";
 import { MAX_PRODUCT_PHOTOS } from "../src/lib/photo.mjs";
 
 export const collections = ["products", "contacts", "works", "visits", "plans"];
+export function canReceiveSellerAssignment(member) {
+  return member?.active === true && TEAM.some((person) => person.id === member.teamId) &&
+    (member.role === "collaborator" || member.role === "supervisor" && member.teamId === "tulio");
+}
 export const validId = (id) =>
   typeof id === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(

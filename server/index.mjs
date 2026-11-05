@@ -13,6 +13,7 @@ import {
   fail,
   requireOwner,
   requireCatalogAdmin,
+  canReceiveSellerAssignment,
   requireContactWrite,
   requireCatalogChange,
   validateState,
@@ -128,8 +129,8 @@ async function readState(db, member, since) {
   state.crm = visibleCrm(await readCrm(db), member);
   if (canAccessServices(member)) Object.assign(state, await readServices(db));
   state.sellers = (await db.query(
-    "SELECT team_id FROM famac.members WHERE active=true AND role='collaborator' AND team_id IS NOT NULL ORDER BY name",
-  )).rows.map((row) => row.team_id);
+    'SELECT team_id AS "teamId",role,active FROM famac.members WHERE active=true AND team_id IS NOT NULL ORDER BY name',
+  )).rows.filter(canReceiveSellerAssignment).map((row) => row.teamId);
   state.notifications = member.teamId
     ? (await db.query(
         `SELECT id, opportunity_id AS "opportunityId", kind, work_name AS "workName",

@@ -11,7 +11,7 @@ import {
 } from "../src/lib/crm.mjs";
 import { normalize, person, productNames } from "../src/lib/domain.mjs";
 import { sellerAssignments } from "../src/lib/seller-notifications.mjs";
-import { validId, fail, requireOwner } from "./policy.mjs";
+import { validId, fail, requireOwner, canReceiveSellerAssignment } from "./policy.mjs";
 
 export async function readCrm(db) {
   const crm = emptyCrm();
@@ -78,10 +78,10 @@ export async function persistCrm(db, before, after, { notify = true, actorName =
   }
   if (notify) for (const row of sellerAssignments(before, after)) {
     const recipient = await db.query(
-      "SELECT 1 FROM famac.members WHERE team_id=$1 AND active=true AND role='collaborator'",
+      'SELECT team_id AS "teamId",role,active FROM famac.members WHERE team_id=$1 AND active=true',
       [row.responsibleId],
     );
-    if (!recipient.rowCount) fail("O vendedor selecionado ainda não possui acesso ativo.");
+    if (!canReceiveSellerAssignment(recipient.rows[0])) fail("O vendedor selecionado ainda não possui acesso ativo.");
     await db.query(
       "UPDATE famac.notifications SET read_at=now() WHERE opportunity_id=$1 AND read_at IS NULL",
       [row.id],
